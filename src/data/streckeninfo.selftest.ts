@@ -345,12 +345,12 @@ console.log('SELFTEST OK');
   const isr = new IsrData();
   let refreshed = 0;
   const svc = new StreckenInfoService(isr.stations, { onRefresh: () => { refreshed++; } });
-  try {
-    await svc.getData();               // 1. echter Scrape -> refreshed=1
-    await svc.getData();               // Cache-Treffer -> refreshed bleibt 1
-    await svc.getData({ force: true }); // erzwungen -> refreshed=2
+  const erst = await svc.getData();             // 1. echter Scrape (Fehler stehen im error-Feld, kein throw)
+  if (erst.error) {
+    console.log('[live] uebersprungen (kein Netz):', erst.error);
+  } else {
+    await svc.getData();                         // Cache-Treffer -> refreshed unveraendert
+    await svc.getData({ force: true });          // erzwungen -> refreshed++
     console.log(`[live] onRefresh-Aufrufe (erwartet 2): ${refreshed}`);
-  } catch (e) {
-    console.log('[live] uebersprungen (kein Netz):', (e as Error).message);
   }
 }
