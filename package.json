@@ -1,0 +1,21 @@
+{
+  "name": "isr-streckennetz",
+  "version": "1.0.0",
+  "description": "DB Infrastrukturregister (ISR): Datenexport, Leaflet-Karte, Routing und TUI-Recherche",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "dev": "tsx watch src/main.ts",
+    "scrape": "tsx src/scrape.ts",
+    "build:data": "tsx src/build-map-data.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["isr", "deutsche-bahn", "streckennetz", "routing", "leaflet"],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
