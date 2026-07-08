@@ -463,15 +463,17 @@ export class StreckenInfoService {
   private readonly apiBase: string;
   private readonly wsUrl: string;
   private readonly ttlMs: number;
+  private readonly onRefresh: (() => void) | null;
   private cache: { data: StreckenInfoResult; ts: number } | null = null;
 
   constructor(
     private stations: StationLookup,
-    opts?: { apiBase?: string; wsUrl?: string; ttlMs?: number },
+    opts?: { apiBase?: string; wsUrl?: string; ttlMs?: number; onRefresh?: () => void },
   ) {
     this.apiBase = opts?.apiBase ?? 'https://strecken-info.de/api';
     this.wsUrl = opts?.wsUrl ?? 'wss://strecken-info.de/api/websocket';
     this.ttlMs = opts?.ttlMs ?? 180_000;
+    this.onRefresh = opts?.onRefresh ?? null;
   }
 
   /** Loest einen RL100 ueber die ISR-Betriebsstellen zu [lon, lat] auf. */
@@ -564,9 +566,11 @@ export class StreckenInfoService {
    * Gecacht (TTL). Wirft NIE: bei Fehler wird das (auch veraltete) Cache-Ergebnis
    * mit gesetztem `error` geliefert, sonst ein leeres Result mit `error`.
    */
-  async getData(): Promise<StreckenInfoResult> {
+  async getData(opts?: { force?: boolean }): Promise<StreckenInfoResult> {
     const nowMs = Date.now();
-    if (this.cache && nowMs - this.cache.ts < this.ttlMs) return this.cache.data;
+    if (!opts?.force && this.cache && nowMs - this.cache.ts < this.ttlMs) {
+      return this.cache.data;
+    }
 
     try {
       const revision = await this.holeRevision();
@@ -585,6 +589,7 @@ export class StreckenInfoService {
       );
       const data: StreckenInfoResult = { ...gebaut, generatedAt: now.toISOString(), error: null };
       this.cache = { data, ts: nowMs };
+      if (this.onRefresh) this.onRefresh(); // nur nach echtem Scrape
       return data;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

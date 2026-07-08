@@ -339,3 +339,18 @@ console.log('SELFTEST OK');
     console.warn('LIVE unerwartet geworfen:', e instanceof Error ? e.message : String(e));
   }
 }
+
+// --- LIVE-Smoke: force + onRefresh (nur Logging) ---
+{
+  const isr = new IsrData();
+  let refreshed = 0;
+  const svc = new StreckenInfoService(isr.stations, { onRefresh: () => { refreshed++; } });
+  try {
+    await svc.getData();               // 1. echter Scrape -> refreshed=1
+    await svc.getData();               // Cache-Treffer -> refreshed bleibt 1
+    await svc.getData({ force: true }); // erzwungen -> refreshed=2
+    console.log(`[live] onRefresh-Aufrufe (erwartet 2): ${refreshed}`);
+  } catch (e) {
+    console.log('[live] uebersprungen (kein Netz):', (e as Error).message);
+  }
+}
