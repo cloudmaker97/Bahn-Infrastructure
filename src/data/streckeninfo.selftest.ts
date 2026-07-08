@@ -347,7 +347,9 @@ console.log('SELFTEST OK');
 }
 
 // --- LIVE-Smoke: force + onRefresh (nur Logging) ---
-{
+// IsrData-Konstruktion in try/catch: in CI fehlen die (gitignorierten) Datendateien,
+// dann wirft der GraphBuilder -> Block sauber ueberspringen statt den Testlauf abbrechen.
+try {
   const isr = new IsrData();
   let refreshed = 0;
   const svc = new StreckenInfoService(isr.stations, { onRefresh: () => { refreshed++; } });
@@ -359,4 +361,6 @@ console.log('SELFTEST OK');
     await svc.getData({ force: true });          // erzwungen -> refreshed++
     console.log(`[live] onRefresh-Aufrufe (erwartet 2): ${refreshed}`);
   }
+} catch (e) {
+  console.log('[live] uebersprungen (keine ISR-Daten):', e instanceof Error ? e.message : String(e));
 }

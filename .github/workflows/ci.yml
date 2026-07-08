@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Selftests laufen ohne Netz/ISR-Daten: die reinen Offline-Asserts greifen,
+      # die Live-Smoke-Blöcke loggen/überspringen sich sauber (kein harter Assert).
+      - name: Selftest – streckeninfo
+        run: npx tsx src/data/streckeninfo.selftest.ts
+
+      - name: Selftest – SSE-Hub
+        run: npx tsx src/server/sse-hub.selftest.ts
+
+      - name: Selftest – TUI
+        run: npx tsx src/tui/tui.selftest.ts
