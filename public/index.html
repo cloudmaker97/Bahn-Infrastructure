@@ -150,7 +150,6 @@
 
       <div id="legend"></div>
       <div id="status">Lade Daten …</div>
-      <div class="hint">Klick auf eine Strecke zeigt die Metadaten. Vollständige 171 Felder in <code>streckenabschnitte.csv</code>.</div>
     </div>
   </div>
 
@@ -291,6 +290,7 @@
     txt.textContent = `Lade Kartendaten … ${Math.round(frac * 100)} %`;
   }).then(lines => {
     buildLines(lines);
+    if (siLastData) siFillRuhen(siLastData.streckenruhen);   // Ruhen-Linien nachziehen, sobald die Strecken-Geometrie geladen ist
     status.textContent = `${lines.features.length.toLocaleString('de-DE')} Abschnitte geladen`;
   }).catch(err => { status.innerHTML = '<span class="err">Fehler beim Laden: ' + err + '</span>'; });
 
@@ -329,6 +329,7 @@
   const siBaustellen = L.layerGroup().addTo(map);
   const siRuhen      = L.layerGroup().addTo(map);
   let siOverlaysAdded = false;                       // Ebenen-Einträge nur einmal anlegen
+  let siLastData = null;                             // letzte Streckeninfo-Antwort (fuer Nachziehen der Ruhen-Linien)
 
   // Farben (klar unterscheidbar, abgesetzt von den Infrastruktur-Overlays)
   const SI_COLOR = { stoerung:'#d23f3f', baustelle:'#f0883e', ruhe:'#8e44ad' };
@@ -436,6 +437,38 @@
     if (fc && Array.isArray(fc.features) && fc.features.length) siBuildLayer(fc, cfg).addTo(group);
   }
 
+  // Streckenruhen als LINIE entlang der ganzen Strecke darstellen: die API liefert je
+  // Ruhe nur einen Punkt + streckennummer (keine Ausdehnung), daher wird die Geometrie
+  // der Strecke aus dem bereits geladenen Abschnitts-Index (idIndex) gezogen und in der
+  // Ruhe-Farbe gestrichelt nachgezeichnet. Zusätzlich ein Ankerpunkt an der gemeldeten
+  // Betriebsstelle (und Fallback, falls die Strecke (noch) nicht im Index ist). Popup je Klick.
+  function siFillRuhen(fc) {
+    siRuhen.clearLayers();
+    const feats = (fc && Array.isArray(fc.features)) ? fc.features : [];
+    for (const f of feats) {
+      const p = f.properties || {};
+      const nr = p.streckennummer;
+      const strecke = (nr != null) ? (idIndex[nr] || idIndex[parseInt(nr, 10)]) : null;
+      let gezeichnet = false;
+      if (strecke && strecke.length) {
+        for (const seg of strecke) {
+          L.polyline(seg.getLatLngs(), { renderer, color: SI_COLOR.ruhe, weight: 5, opacity: 0.85, dashArray: '6 7' })
+            .bindPopup(() => siRuhePopup(p), { maxWidth: 360 })
+            .addTo(siRuhen);
+          gezeichnet = true;
+        }
+      }
+      const g = f.geometry;                    // Ankerpunkt/Fallback an der gemeldeten Betriebsstelle
+      if (g && g.type === 'Point' && Array.isArray(g.coordinates)) {
+        const [lon, lat] = g.coordinates;
+        L.circleMarker([lat, lon], { renderer, radius: gezeichnet ? 5 : 6, color: '#ffffff', weight: 1.5,
+            fillColor: SI_COLOR.ruhe, fillOpacity: 0.95 })
+          .bindPopup(() => siRuhePopup(p), { maxWidth: 360 })
+          .addTo(siRuhen);
+      }
+    }
+  }
+
   // Sammelmeldungen (kein Geo) im Panel rendern; bei 0 Einträgen ausblenden.
   function siRenderSammel(list) {
     const arr = Array.isArray(list) ? list : [];
@@ -473,9 +506,10 @@
       return r.json();
     }).then(data => {
       data = data || {};
+      siLastData = data;
       siFill(siStoerungen, data.stoerungen,    { color: SI_COLOR.stoerung,  popup: siStoerungPopup });
       siFill(siBaustellen, data.baustellen,    { color: SI_COLOR.baustelle, popup: siBaustellePopup });
-      siFill(siRuhen,      data.streckenruhen, { color: SI_COLOR.ruhe,      popup: siRuhePopup });
+      siFillRuhen(data.streckenruhen);
       const counts = data.counts || {
         stoerungen:    ((data.stoerungen    && data.stoerungen.features)    || []).length,
         baustellen:    ((data.baustellen    && data.baustellen.features)    || []).length,
