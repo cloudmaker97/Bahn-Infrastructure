@@ -1,7 +1,7 @@
 // Selbsttest der reinen Live-Zug-Kernfunktionen (ohne Netz/Browser).
 // Laufbar mit: npx tsx public/live-trips.selftest.mjs
 import assert from 'node:assert';
-import { decodePolyline, buildTrack, positionAt, isRailMode, categoryOf, normalizeTrips } from './live-trips.js';
+import { decodePolyline, buildTrack, positionAt, isRailMode, categoryOf, normalizeTrips, isGermanNetwork } from './live-trips.js';
 
 // --- 1) decodePolyline (Standard-Google-Testvektor, Präzision 5) ---
 {
@@ -41,22 +41,35 @@ import { decodePolyline, buildTrack, positionAt, isRailMode, categoryOf, normali
   assert.strictEqual(categoryOf('SUBURBAN'), 'sbahn');
 }
 
-// --- 4) normalizeTrips ---
+// --- 4) isGermanNetwork ---
 {
+  assert.ok(isGermanNetwork({ from: { stopId: 'de-DELFI_de:03241:31' }, to: { stopId: 'de-DELFI_de:1' } }), 'de/de -> deutsch');
+  assert.ok(isGermanNetwork({ from: { stopId: 'ch-x_1' }, to: { stopId: 'de-DELFI_de:1' } }), 'ein deutscher Endpunkt genügt');
+  assert.ok(!isGermanNetwork({ from: { stopId: 'at-Railway_1' }, to: { stopId: 'ch-x_2' } }), 'rein ausländisch -> false');
+  assert.ok(!isGermanNetwork({ from: { stopId: 'fr-eurostar-gtfs-plan-de-transport_1' } }), '"de" nur im Inneren zählt nicht');
+  assert.ok(!isGermanNetwork({}), 'ohne Halte -> false');
+}
+
+// --- 5) normalizeTrips (nur deutsches Netz, Bahn, gültige Zeiten/Polyline) ---
+{
+  const DE = (n) => ({ name: n, stopId: 'de-DELFI_de:' + n });
   const raw = [
     { mode: 'BUS', departure: '2026-07-08T18:00:00Z', arrival: '2026-07-08T18:30:00Z',
-      polyline: '_p~iF~ps|U_ulLnnqC', trips: [{ tripId: 'b1', displayName: 'Bus 1' }] },
+      polyline: '_p~iF~ps|U_ulLnnqC', from: DE('X'), to: DE('Y'), trips: [{ tripId: 'b1', displayName: 'Bus 1' }] },
     { mode: 'HIGHSPEED_RAIL', departure: '2026-07-08T18:29:00Z', arrival: '2026-07-08T19:00:00Z',
       scheduledDeparture: '2026-07-08T18:26:00Z', scheduledArrival: '2026-07-08T18:57:00Z',
-      realTime: true, polyline: '_p~iF~ps|U_ulLnnqC', from: { name: 'A-Stadt' }, to: { name: 'B-Dorf' },
+      realTime: true, polyline: '_p~iF~ps|U_ulLnnqC', from: DE('A-Stadt'), to: DE('B-Dorf'),
       trips: [{ tripId: 't1', displayName: 'ICE 542' }] },
+    { mode: 'REGIONAL_RAIL', departure: '2026-07-08T18:29:00Z', arrival: '2026-07-08T19:00:00Z',
+      polyline: '_p~iF~ps|U_ulLnnqC', from: { name: 'Wien', stopId: 'at-Railway_1' }, to: { name: 'Wien', stopId: 'at-Railway_2' },
+      trips: [{ tripId: 'at1', displayName: 'RJ 123' }] }, // Ausland -> raus
     { mode: 'REGIONAL_RAIL', departure: '2026-07-08T19:00:00Z', arrival: '2026-07-08T18:00:00Z',
-      polyline: '_p~iF~ps|U_ulLnnqC', trips: [{ tripId: 'bad' }] }, // arrival <= departure
+      polyline: '_p~iF~ps|U_ulLnnqC', from: DE('C'), to: DE('D'), trips: [{ tripId: 'bad' }] }, // arrival <= departure
     { mode: 'REGIONAL_RAIL', departure: '2026-07-08T18:10:00Z', arrival: '2026-07-08T18:40:00Z',
-      polyline: '', trips: [{ tripId: 'nopoly' }] }, // keine Polyline
+      polyline: '', from: DE('E'), to: DE('F'), trips: [{ tripId: 'nopoly' }] }, // keine Polyline
   ];
   const list = normalizeTrips(raw, Date.parse('2026-07-08T18:40:00Z'));
-  assert.strictEqual(list.length, 1, 'nur der gültige Bahn-Zug bleibt');
+  assert.strictEqual(list.length, 1, 'nur der gültige deutsche Bahn-Zug bleibt');
   const z = list[0];
   assert.strictEqual(z.name, 'ICE 542');
   assert.strictEqual(z.category, 'fern');
