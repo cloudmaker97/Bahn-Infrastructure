@@ -1,5 +1,9 @@
 # Bahn-Infrastructure
 
+![Suche nach Elementen](docs/screenshots/screenshot_search.png)
+![Streckenabschnitte](docs/screenshots/screenshot_section.png)
+![Meldungen und Störungen](docs/screenshots/screenshot_warning.png)
+
 ## Schnellstart
 
 Voraussetzung: **Node.js ≥ 18**. Dann:
