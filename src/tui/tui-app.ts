@@ -3,7 +3,7 @@
 import { InputHandler } from './input-handler.js';
 import { TuiRenderer, FILTER_CYCLE, type TuiContext, type TuiState } from './tui-renderer.js';
 import { ESC } from './ansi.js';
-import type { EntitySearch } from '../types.js';
+import type { EntitySearch, MeldungenProvider } from '../types.js';
 
 export interface TuiAppOptions {
   getContext: () => TuiContext;
@@ -11,13 +11,17 @@ export interface TuiAppOptions {
 }
 
 export class TuiApp {
-  private state: TuiState = { query: '', results: [], sel: 0, mode: 'list', detailScroll: 0, filter: null };
+  private state: TuiState = {
+    query: '', results: [], sel: 0, mode: 'list', detailScroll: 0, filter: null,
+    meldungen: { status: 'idle', data: null }, meldungenScroll: 0,
+  };
   private out = process.stdout;
 
   constructor(
     private search: EntitySearch,
     private renderer: TuiRenderer,
     private input: InputHandler,
+    private meldungen: MeldungenProvider,
     private opts: TuiAppOptions,
   ) {}
 
@@ -33,7 +37,7 @@ export class TuiApp {
   }
 
   private onKey(key: string): void {
-    const action = this.input.parse(key, this.state.mode === 'detail');
+    const action = this.input.parse(key, this.state.mode);
     const s = this.state;
     switch (action.type) {
       case 'quit': this.cleanup(); this.opts.onQuit(); return;
@@ -42,19 +46,47 @@ export class TuiApp {
       case 'clear': s.query = ''; this.updateResults(); break;
       case 'up':
         if (s.mode === 'detail') s.detailScroll = Math.max(0, s.detailScroll - 1);
+        else if (s.mode === 'meldungen') s.meldungenScroll = Math.max(0, s.meldungenScroll - 1);
         else s.sel = Math.max(0, s.sel - 1);
         break;
       case 'down':
         if (s.mode === 'detail') s.detailScroll += 1;
+        else if (s.mode === 'meldungen') s.meldungenScroll += 1;
         else s.sel = Math.min(s.results.length - 1, s.sel + 1);
         break;
       case 'enter': if (s.results.length) { s.mode = 'detail'; s.detailScroll = 0; } break;
       case 'back': s.mode = 'list'; break;
       case 'filter-next': this.cycleFilter(1); break;
       case 'filter-prev': this.cycleFilter(-1); break;
+      case 'meldungen-open': this.openMeldungen(); break;
+      case 'refresh': this.refreshMeldungen(); break;
       case 'none': return;
     }
     this.draw();
+  }
+
+  private openMeldungen(): void {
+    const s = this.state;
+    s.mode = 'meldungen';
+    s.meldungenScroll = 0;
+    if (!s.meldungen.data) {
+      s.meldungen = { status: 'loading', data: null };
+      this.loadMeldungen(false);
+    }
+  }
+
+  private refreshMeldungen(): void {
+    if (this.state.mode !== 'meldungen') return;
+    this.state.meldungen = { status: 'refreshing', data: this.state.meldungen.data };
+    this.loadMeldungen(true);
+  }
+
+  /** Holt Daten (ggf. erzwungen) und zeichnet neu, wenn die Ansicht noch offen ist. */
+  private loadMeldungen(force: boolean): void {
+    void this.meldungen.getData(force ? { force: true } : undefined).then((data) => {
+      this.state.meldungen = { status: 'ready', data };
+      if (this.state.mode === 'meldungen') this.draw();
+    });
   }
 
   private updateResults(): void {

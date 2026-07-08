@@ -41,7 +41,7 @@ httpServer.listen();
 
 function shutdown(): void { httpServer.close(); process.exit(0); }
 
-const tui = new TuiApp(data.search, new TuiRenderer(data.abschnitte), new InputHandler(), {
+const tui = new TuiApp(data.search, new TuiRenderer(data.abschnitte), new InputHandler(), streckeninfo, {
   getContext: () => ({ url, requestCount: httpServer.requestCount, totalObjects: data.search.entries.length }),
   onQuit: shutdown,
 });
