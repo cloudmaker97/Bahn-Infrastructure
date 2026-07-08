@@ -17,6 +17,9 @@ export class SseHub {
     res.on('close', () => {
       this.clients.delete(res);
     });
+    res.on('error', () => {
+      this.clients.delete(res);
+    });
   }
 
   /** Sendet ein (datenloses) Event an alle Clients; tote Clients werden entfernt. */

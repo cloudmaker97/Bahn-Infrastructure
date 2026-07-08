@@ -31,7 +31,7 @@ class FakeRes extends EventEmitter {
 
   hub.broadcast('streckeninfo');
   assert.ok(
-    a.chunks.some((c) => c.includes('event: streckeninfo')),
+    a.chunks.some((c) => c.includes('event: streckeninfo\ndata: {}\n\n')),
     'Client a hat Event erhalten',
   );
   assert.ok(b.chunks.some((c) => c.includes('event: streckeninfo')), 'Client b hat Event erhalten');
@@ -41,4 +41,46 @@ class FakeRes extends EventEmitter {
 
   hub.broadcast('streckeninfo'); // darf nicht werfen, obwohl a geschlossen ist
   console.log('SseHub OK');
+}
+
+{
+  // Deckt den catch-Zweig in broadcast() ab: ein Client, dessen write() wirft,
+  // wird entfernt, ohne dass die Exception nach aussen dringt.
+  const hub = new SseHub();
+
+  /**
+   * ServerResponse-Double, dessen write() erst ab dem zweiten Aufruf wirft.
+   * Der erste Aufruf ist der retry-Hinweis aus addClient() und muss gelingen,
+   * damit der Client ueberhaupt registriert wird; der zweite Aufruf (aus
+   * broadcast()) simuliert einen kaputten Socket.
+   */
+  class ThrowingRes extends EventEmitter {
+    private writes = 0;
+    writeHead(): this {
+      return this;
+    }
+    write(): boolean {
+      this.writes += 1;
+      if (this.writes > 1) {
+        throw new Error('socket kaputt');
+      }
+      return true;
+    }
+  }
+
+  const good = new FakeRes();
+  const bad = new ThrowingRes();
+
+  hub.addClient(good as unknown as ServerResponse);
+  hub.addClient(bad as unknown as ServerResponse);
+  assert.strictEqual(hub.clientCount, 2, 'zwei Clients vor dem Schreibfehler registriert');
+
+  assert.doesNotThrow(() => hub.broadcast('streckeninfo'), 'broadcast wirft nicht bei defektem Client');
+  assert.strictEqual(hub.clientCount, 1, 'Client mit Schreibfehler wurde entfernt');
+  assert.ok(
+    good.chunks.includes('event: streckeninfo\ndata: {}\n\n'),
+    'intakter Client hat vollstaendigen Frame erhalten',
+  );
+
+  console.log('SseHub broadcast-Schreibfehler OK');
 }
