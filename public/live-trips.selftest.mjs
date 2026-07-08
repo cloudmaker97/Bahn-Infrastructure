@@ -1,7 +1,7 @@
 // Selbsttest der reinen Live-Zug-Kernfunktionen (ohne Netz/Browser).
 // Laufbar mit: npx tsx public/live-trips.selftest.mjs
 import assert from 'node:assert';
-import { decodePolyline, buildTrack, positionAt, isRailMode, categoryOf } from './live-trips.js';
+import { decodePolyline, buildTrack, positionAt, isRailMode, categoryOf, normalizeTrips } from './live-trips.js';
 
 // --- 1) decodePolyline (Standard-Google-Testvektor, Präzision 5) ---
 {
@@ -39,6 +39,33 @@ import { decodePolyline, buildTrack, positionAt, isRailMode, categoryOf } from '
   assert.strictEqual(categoryOf('LONG_DISTANCE'), 'fern');
   assert.strictEqual(categoryOf('REGIONAL_RAIL'), 'regio');
   assert.strictEqual(categoryOf('SUBURBAN'), 'sbahn');
+}
+
+// --- 4) normalizeTrips ---
+{
+  const raw = [
+    { mode: 'BUS', departure: '2026-07-08T18:00:00Z', arrival: '2026-07-08T18:30:00Z',
+      polyline: '_p~iF~ps|U_ulLnnqC', trips: [{ tripId: 'b1', displayName: 'Bus 1' }] },
+    { mode: 'HIGHSPEED_RAIL', departure: '2026-07-08T18:29:00Z', arrival: '2026-07-08T19:00:00Z',
+      scheduledDeparture: '2026-07-08T18:26:00Z', scheduledArrival: '2026-07-08T18:57:00Z',
+      realTime: true, polyline: '_p~iF~ps|U_ulLnnqC', from: { name: 'A-Stadt' }, to: { name: 'B-Dorf' },
+      trips: [{ tripId: 't1', displayName: 'ICE 542' }] },
+    { mode: 'REGIONAL_RAIL', departure: '2026-07-08T19:00:00Z', arrival: '2026-07-08T18:00:00Z',
+      polyline: '_p~iF~ps|U_ulLnnqC', trips: [{ tripId: 'bad' }] }, // arrival <= departure
+    { mode: 'REGIONAL_RAIL', departure: '2026-07-08T18:10:00Z', arrival: '2026-07-08T18:40:00Z',
+      polyline: '', trips: [{ tripId: 'nopoly' }] }, // keine Polyline
+  ];
+  const list = normalizeTrips(raw, Date.parse('2026-07-08T18:40:00Z'));
+  assert.strictEqual(list.length, 1, 'nur der gültige Bahn-Zug bleibt');
+  const z = list[0];
+  assert.strictEqual(z.name, 'ICE 542');
+  assert.strictEqual(z.category, 'fern');
+  assert.strictEqual(z.delayMin, 3, 'Verspätung 3 min');
+  assert.strictEqual(z.realTime, true);
+  assert.strictEqual(z.fromName, 'A-Stadt');
+  assert.strictEqual(z.toName, 'B-Dorf');
+  assert.ok(z.track.points.length >= 2, 'Track hat >= 2 Punkte');
+  assert.ok(typeof z.id === 'string' && z.id.length > 0, 'id gesetzt');
 }
 
 console.log('live-trips selftest: OK');

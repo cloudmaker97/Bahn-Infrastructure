@@ -87,3 +87,46 @@ export function categoryOf(mode) {
 
 /** Kategorie-Farben, abgesetzt von den Infrastruktur-Overlays. */
 export const CATEGORY_COLOR = { fern: '#d23f3f', regio: '#2ec76b', sbahn: '#2f7fe0' };
+
+/**
+ * Wandelt die Roh-Segmente von map/trips in normalisierte Zug-Objekte.
+ * Verwirft Nicht-Eisenbahn, ungültige Zeiten und undekodierbare Polylinien.
+ * @param {any[]} rawArray
+ * @param {number} nowMs  (reserviert; aktuell ohne Wirkung auf das Ergebnis)
+ * @returns {object[]}
+ */
+export function normalizeTrips(rawArray, nowMs) {
+  const out = [];
+  if (!Array.isArray(rawArray)) return out;
+  for (const seg of rawArray) {
+    if (!seg || !isRailMode(seg.mode)) continue;
+    const departMs = Date.parse(seg.departure);
+    const arriveMs = Date.parse(seg.arrival);
+    if (!Number.isFinite(departMs) || !Number.isFinite(arriveMs) || arriveMs <= departMs) continue;
+    if (typeof seg.polyline !== 'string' || seg.polyline.length === 0) continue;
+    const coords = decodePolyline(seg.polyline);
+    if (coords.length < 2) continue;
+
+    const trip = (Array.isArray(seg.trips) && seg.trips[0]) ? seg.trips[0] : {};
+    const schedDepartMs = Date.parse(seg.scheduledDeparture);
+    const schedArriveMs = Date.parse(seg.scheduledArrival);
+    const delayMin = Number.isFinite(schedDepartMs) ? Math.round((departMs - schedDepartMs) / 60000) : 0;
+
+    out.push({
+      id: `${trip.tripId || seg.mode}@${departMs}`,
+      name: trip.displayName || '',
+      mode: seg.mode,
+      category: categoryOf(seg.mode),
+      track: buildTrack(coords),
+      departMs,
+      arriveMs,
+      schedDepartMs: Number.isFinite(schedDepartMs) ? schedDepartMs : departMs,
+      schedArriveMs: Number.isFinite(schedArriveMs) ? schedArriveMs : arriveMs,
+      delayMin,
+      realTime: seg.realTime === true,
+      fromName: (seg.from && seg.from.name) || '',
+      toName: (seg.to && seg.to.name) || '',
+    });
+  }
+  return out;
+}
