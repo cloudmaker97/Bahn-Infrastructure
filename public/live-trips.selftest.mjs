@@ -1,7 +1,7 @@
 // Selbsttest der reinen Live-Zug-Kernfunktionen (ohne Netz/Browser).
 // Laufbar mit: npx tsx public/live-trips.selftest.mjs
 import assert from 'node:assert';
-import { decodePolyline } from './live-trips.js';
+import { decodePolyline, buildTrack, positionAt } from './live-trips.js';
 
 // --- 1) decodePolyline (Standard-Google-Testvektor, Präzision 5) ---
 {
@@ -10,6 +10,21 @@ import { decodePolyline } from './live-trips.js';
   assert.ok(Math.abs(pts[0][0] - 38.5) < 1e-5 && Math.abs(pts[0][1] + 120.2) < 1e-5, 'Punkt 1');
   assert.ok(Math.abs(pts[1][0] - 40.7) < 1e-5 && Math.abs(pts[1][1] + 120.95) < 1e-5, 'Punkt 2');
   assert.ok(Math.abs(pts[2][0] - 43.252) < 1e-5 && Math.abs(pts[2][1] + 126.453) < 1e-5, 'Punkt 3');
+}
+
+// --- 2) buildTrack / positionAt ---
+{
+  const track = buildTrack([[0, 0], [0, 10]]);
+  assert.ok(Math.abs(track.total - 10) < 1e-6, 'Gesamtlänge ~10');
+  assert.deepStrictEqual(positionAt(track, 0), [0, 0], 'frac 0 -> Start');
+  assert.deepStrictEqual(positionAt(track, 1), [0, 10], 'frac 1 -> Ende');
+  const mid = positionAt(track, 0.5);
+  assert.ok(Math.abs(mid[0]) < 1e-6 && Math.abs(mid[1] - 5) < 1e-6, 'frac 0.5 -> Mitte');
+  assert.deepStrictEqual(positionAt(track, -1), [0, 0], 'Klemmung unten');
+  assert.deepStrictEqual(positionAt(track, 2), [0, 10], 'Klemmung oben');
+
+  const drei = buildTrack([[0, 0], [0, 10], [0, 20]]);
+  assert.ok(Math.abs(positionAt(drei, 0.5)[1] - 10) < 1e-6, 'gleichmäßiger 3-Punkt-Track: Mitte bei 10');
 }
 
 console.log('live-trips selftest: OK');
