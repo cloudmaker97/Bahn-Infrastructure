@@ -86,6 +86,10 @@ export class TuiApp {
     void this.meldungen.getData(force ? { force: true } : undefined).then((data) => {
       this.state.meldungen = { status: 'ready', data };
       if (this.state.mode === 'meldungen') this.draw();
+    }).catch(() => {
+      // getData() sollte nie werfen; falls doch, nicht auf loading/refreshing haengen bleiben.
+      this.state.meldungen = { status: 'ready', data: this.state.meldungen.data };
+      if (this.state.mode === 'meldungen') this.draw();
     });
   }
 

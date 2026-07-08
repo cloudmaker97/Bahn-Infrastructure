@@ -301,6 +301,8 @@ import { IsrData } from './isr-data.js';
         wirkungenMitVerkehrsarten: [{ wirkung: 'Sperrung', verkehrsarten: ['FV', 'NV'] }] },
       { key: 'o', cause: 'Oberleitung', subcause: 'y', text: 'ohne Ort',
         zeitraum, gleisEinschraenkung: 'SCHWER' }, // keine Geo-Quelle -> nicht verortbar
+      { key: 's', cause: 'Sonstige Unregelmäßigkeit', subcause: '', text: 'Sammelmeldung',
+        zeitraum, sammelmeldung: true }, // Sammelmeldung -> darf NICHT in stoerungenListe landen
     ],
     baustellen: [],
     streckenruhen: [],
@@ -310,7 +312,7 @@ import { IsrData } from './isr-data.js';
   const r = baueGeoJson(roh, now, resolve);
 
   assert.strictEqual(r.stoerungen.features.length, 1, 'nur verortete in features');
-  assert.strictEqual(r.stoerungenListe.length, 2, 'alle aktiven in stoerungenListe');
+  assert.strictEqual(r.stoerungenListe.length, 2, 'nur Nicht-Sammelmeldungen in stoerungenListe');
   const verortet = r.stoerungenListe.find((m) => m.key === 'v');
   const ohneOrt = r.stoerungenListe.find((m) => m.key === 'o');
   assert.ok(verortet && verortet.verortet === true, 'v ist verortet');
@@ -318,6 +320,10 @@ import { IsrData } from './isr-data.js';
   assert.ok(ohneOrt && ohneOrt.verortet === false, 'o ist nicht verortet');
   assert.strictEqual(ohneOrt!.gleisEinschraenkung, 'SCHWER', 'gleisEinschraenkung uebernommen');
   assert.strictEqual(r.counts.stoerungenOhneOrt, 1, 'ohne-Ort-Zaehler unveraendert');
+  assert.ok(
+    !r.stoerungenListe.some((m) => m.key === 's'),
+    'Sammelmeldung (sammelmeldung:true) darf nicht in stoerungenListe sein',
+  );
 }
 
 console.log('SELFTEST OK');

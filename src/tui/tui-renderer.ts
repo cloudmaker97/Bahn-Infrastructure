@@ -2,7 +2,7 @@
 // Keine Seiteneffekte, keine IO -> gut testbar. Fuer Strecken wird die Abschnittsliste angezeigt.
 import { ESC, bold, dim, inv, c, pad, stripAnsi, wrap, KIND_COLOR } from './ansi.js';
 import type { AbschnittLookup, AbschnittProps, SearchEntry } from '../types.js';
-import type { StreckenInfoResult, StoerungMeldungDTO, SammelmeldungDTO } from '../types.js';
+import type { StreckenInfoResult } from '../types.js';
 
 export type TuiMode = 'list' | 'detail' | 'meldungen';
 
@@ -106,14 +106,7 @@ export class TuiRenderer {
 
     const body = e.kind === 'Strecke' ? this.streckenBody(e, W) : this.fieldBody(e, W);
 
-    const avail = H - lines.length - 2;
-    const maxScroll = Math.max(0, body.length - avail);
-    const scroll = Math.min(state.detailScroll, maxScroll);
-    for (const line of body.slice(scroll, scroll + avail)) lines.push(line);
-    if (maxScroll > 0) {
-      const shown = Math.min(scroll + avail, body.length);
-      lines.push(dim(` — Zeile ${scroll + 1}–${shown} von ${body.length}${scroll < maxScroll ? '  ↓ mehr' : ''} —`));
-    }
+    this.pushScrollWindow(body, state.detailScroll, H, lines);
   }
 
   /** Betriebslage-Ansicht: Stoerungen + Sammelmeldungen, scrollbar. */
@@ -146,13 +139,18 @@ export class TuiRenderer {
         m.beginn, m.ende, m.verkehrsarten, '', '', W);
     }
 
+    this.pushScrollWindow(body, state.meldungenScroll, H, lines);
+  }
+
+  /** Schiebt das sichtbare Fenster von `body` (per `scroll`) in `lines` und haengt die Positionsanzeige an. */
+  private pushScrollWindow(body: string[], scroll: number, H: number, lines: string[]): void {
     const avail = H - lines.length - 2;
     const maxScroll = Math.max(0, body.length - avail);
-    const scroll = Math.min(state.meldungenScroll, maxScroll);
-    for (const line of body.slice(scroll, scroll + avail)) lines.push(line);
+    const clamped = Math.min(scroll, maxScroll);
+    for (const line of body.slice(clamped, clamped + avail)) lines.push(line);
     if (maxScroll > 0) {
-      const shown = Math.min(scroll + avail, body.length);
-      lines.push(dim(` — Zeile ${scroll + 1}–${shown} von ${body.length}${scroll < maxScroll ? '  ↓ mehr' : ''} —`));
+      const shown = Math.min(clamped + avail, body.length);
+      lines.push(dim(` — Zeile ${clamped + 1}–${shown} von ${body.length}${clamped < maxScroll ? '  ↓ mehr' : ''} —`));
     }
   }
 

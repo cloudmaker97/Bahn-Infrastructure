@@ -31,6 +31,9 @@ import type { AbschnittLookup } from '../types.js';
   assert.deepStrictEqual(h.parse('\x03', 'list'), { type: 'quit' }, 'Ctrl+C beendet');
   // Detailmodus unveraendert
   assert.deepStrictEqual(h.parse('\x1b', 'detail'), { type: 'back' }, 'Esc -> zurueck aus Detail');
+  // Modus-Abweisung: Ctrl+B tut in Meldungen nichts, 'r' ist in der Liste nur ein Suchzeichen.
+  assert.deepStrictEqual(h.parse('\x02', 'meldungen'), { type: 'none' }, 'Ctrl+B ohne Wirkung in Meldungen');
+  assert.deepStrictEqual(h.parse('r', 'list'), { type: 'char', ch: 'r' }, 'r ist Suchzeichen in Liste');
 }
 
 // --- Renderer: renderMeldungen ---
@@ -69,6 +72,19 @@ import type { AbschnittLookup } from '../types.js';
   assert.match(ready, /Kaputtes Signal/, 'Stoerungs-text sichtbar');
   assert.match(ready, /ohne Ort/, 'Marker fuer nicht verortete Stoerung');
 
+  // verortet:true darf KEINEN "ohne Ort"-Marker zeigen
+  const dataVerortet = {
+    ...data,
+    stoerungenListe: [{ key: 'x2', cause: 'Weichenstoerung', subcause: '', text: 'Weiche defekt',
+      beginn: '', ende: '', verkehrsarten: ['FV'], gleisEinschraenkung: '', verortet: true }],
+  };
+  const readyVerortet = stripAnsi(rend.render(baseState({ status: 'ready', data: dataVerortet }), ctx, 100, 24));
+  assert.doesNotMatch(readyVerortet, /ohne Ort/, 'verortete Stoerung ohne "ohne Ort"-Marker');
+
+  // refreshing-Status zeigt "Aktualisiere …"
+  const refreshing = stripAnsi(rend.render(baseState({ status: 'refreshing', data }), ctx, 100, 24));
+  assert.match(refreshing, /Aktualisiere/, 'refreshing-Status zeigt Aktualisiere-Hinweis');
+
   // error
   const errData = { ...data, error: 'Netzfehler' };
   const err = stripAnsi(rend.render(baseState({ status: 'ready', data: errData }), ctx, 100, 24));
@@ -80,4 +96,4 @@ import type { AbschnittLookup } from '../types.js';
   assert.match(empty, /Keine aktuellen Meldungen/, 'Leer-Hinweis');
 }
 
-console.log('TUI-Teil A (wrap, input) OK');
+console.log('TUI-Teil A+B (wrap, input, renderMeldungen) OK');

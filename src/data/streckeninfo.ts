@@ -589,7 +589,11 @@ export class StreckenInfoService {
       );
       const data: StreckenInfoResult = { ...gebaut, generatedAt: now.toISOString(), error: null };
       this.cache = { data, ts: nowMs };
-      if (this.onRefresh) this.onRefresh(); // nur nach echtem Scrape
+      try {
+        if (this.onRefresh) this.onRefresh(); // nur nach echtem Scrape
+      } catch {
+        /* Callback-Fehler nicht als Scrape-Fehler werten */
+      }
       return data;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
