@@ -106,7 +106,9 @@ export class TuiRenderer {
     lines.push(` ${c(KIND_COLOR[e.kind], '[' + e.kind + ']')} ${bold(e.code)} — ${bold(e.name)}`);
     lines.push(dim('─'.repeat(W)));
 
-    const body = e.kind === 'Strecke' ? this.streckenBody(e, W) : this.fieldBody(e, W);
+    const body = e.kind === 'Strecke' ? this.streckenBody(e, W)
+      : e.kind === 'Betriebsstelle' ? this.betriebsstelleBody(e, W)
+      : this.fieldBody(e, W);
 
     this.pushScrollWindow(body, state.detailScroll, H, lines);
   }
@@ -200,6 +202,24 @@ export class TuiRenderer {
     const v = String(a.BET_GESCHWINDIGKEIT ?? '').trim();
     const gleis = String(a.INF_GLEISANZAHL ?? '');
     return ` ${pad(km, 22)} ${pad(vonBis, W - 58)} ${pad(laenge + ' km', 8)} ${pad(v, 5)} ${dim(gleis)}`;
+  }
+
+  /** Body fuer eine Betriebsstelle: Basisfelder + zugehoerige Strecken/Abschnitte. */
+  private betriebsstelleBody(e: SearchEntry, W: number): string[] {
+    const body = this.fieldBody(e, W);
+    const stel = Number(e.data['stel']);
+    const list = Number.isFinite(stel) ? this.abschnitte.byStation(stel) : [];
+    body.push('');
+    body.push(bold(` Zugehörige Strecken/Abschnitte (${list.length}):`));
+    if (list.length === 0) { body.push(dim(' (keine)')); return body; }
+    body.push(dim(` ${pad('Strecke', 9)} ${pad('von – bis', W - 40)} ${pad('km von → bis', 24)}`));
+    for (const a of list) {
+      const nr = String(a.ISR_STRE_NR ?? '?');
+      const vonBis = String(a.ISR_STRECKE_VON_BIS ?? '');
+      const km = `${a.ISR_KM_VON ?? '?'} → ${a.ISR_KM_BIS ?? '?'}`;
+      body.push(` ${pad(c(KIND_COLOR['Strecke'], nr), 9)} ${pad(vonBis, W - 40)} ${dim(pad(km, 24))}`);
+    }
+    return body;
   }
 
   /** Body fuer alle anderen Entitaeten: alle nicht-leeren Felder. */

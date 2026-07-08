@@ -114,9 +114,11 @@ export interface EntitySearch {
   search(q: string, limit?: number, kind?: SearchEntry['kind'] | null): SearchEntry[];
 }
 
-/** Liefert die Abschnitte einer Strecke (fuer die TUI-Detailansicht). */
+/** Liefert die Abschnitte einer Strecke bzw. die einer Betriebsstelle zugehoerigen Abschnitte. */
 export interface AbschnittLookup {
   byStrecke(streckenNr: number): AbschnittProps[];
+  /** Alle Abschnitte, an denen die Betriebsstelle (STEL_ID) Anfang oder Ende ist. */
+  byStation(stel: number): AbschnittProps[];
 }
 
 /** Ein durchsuchbarer Eintrag fuer TUI / Such-API. */

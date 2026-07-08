@@ -43,7 +43,12 @@ import type { AbschnittLookup } from '../types.js';
 
 // --- Renderer: renderMeldungen ---
 {
-  const abschnitte: AbschnittLookup = { byStrecke: () => [] };
+  const abschnitte: AbschnittLookup = {
+    byStrecke: () => [],
+    byStation: (stel) => stel === 4242
+      ? [{ ISR_STRE_NR: 1733, ISR_STRECKE_VON_BIS: 'Uelzen – Langwedel', ISR_KM_VON: '12,3', ISR_KM_BIS: '18,7' }]
+      : [],
+  };
   const rend = new TuiRenderer(abschnitte);
   const ctx = { url: 'http://x/', requestCount: 0, totalObjects: 0 };
 
@@ -104,6 +109,18 @@ import type { AbschnittLookup } from '../types.js';
   const withNotice: TuiState = { ...baseState({ status: 'ready', data: emptyData }), mode: 'list', notice: 'Karte im Browser geöffnet.' };
   const noticeFrame = stripAnsi(rend.render(withNotice, ctx, 100, 24));
   assert.match(noticeFrame, /Karte im Browser geöffnet/, 'notice im Kopf sichtbar');
+
+  // Betriebsstelle-Detail: zugehoerige Strecken/Abschnitte (via byStation)
+  const bstEntry = {
+    kind: 'Betriebsstelle' as const, code: 'XY', name: 'Teststelle', detail: '',
+    data: { stel: 4242, rl100: 'XY', name: 'Teststelle' },
+  };
+  const bstState: TuiState = { ...baseState({ status: 'idle', data: null }), mode: 'detail', results: [bstEntry], sel: 0 };
+  const bstFrame = stripAnsi(rend.render(bstState, ctx, 100, 24));
+  assert.match(bstFrame, /Zugehörige Strecken\/Abschnitte \(1\)/, 'Betriebsstelle: Ueberschrift mit Anzahl');
+  assert.match(bstFrame, /1733/, 'Betriebsstelle: Streckennummer sichtbar');
+  assert.match(bstFrame, /Uelzen – Langwedel/, 'Betriebsstelle: von-bis sichtbar');
+  assert.match(bstFrame, /12,3 → 18,7/, 'Betriebsstelle: km-Bereich sichtbar');
 }
 
 console.log('TUI-Teil A+B (wrap, input, renderMeldungen) OK');

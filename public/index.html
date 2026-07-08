@@ -223,7 +223,8 @@
   }
 
   let lineLayer, mode = 'elektr';
-  const idIndex = {}; // ISR_STRE_NR -> array of layers
+  const idIndex = {};   // ISR_STRE_NR -> array of layers
+  const stelIndex = {}; // STEL_ID -> array of {nr, vonBis, kmVon, kmBis} (zugehörige Abschnitte)
 
   function styleFn(f){ return { color: colorFor(f.properties, mode), weight: 2.2, opacity: 0.9 }; }
 
@@ -232,8 +233,14 @@
       renderer, style: styleFn,
       onEachFeature: (f, layer) => {
         layer.bindPopup(() => popupHtml(f.properties), { maxWidth: 380 });
-        const nr = f.properties.ISR_STRE_NR;
-        (idIndex[nr] = idIndex[nr] || []).push(layer);
+        const p = f.properties;
+        (idIndex[p.ISR_STRE_NR] = idIndex[p.ISR_STRE_NR] || []).push(layer);
+        // Abschnitt beiden Endpunkt-Betriebsstellen zuordnen (STEL_ID von/bis).
+        const seg = { nr: p.ISR_STRE_NR, vonBis: p.ISR_STRECKE_VON_BIS || '', kmVon: p.ISR_KM_VON || '', kmBis: p.ISR_KM_BIS || '' };
+        for (const stel of [p.ISR_STEL_ID_VON, p.ISR_STEL_ID_BIS]) {
+          if (stel == null) continue;
+          (stelIndex[stel] = stelIndex[stel] || []).push(seg);
+        }
       }
     }).addTo(map);
   }
@@ -243,6 +250,20 @@
     return `<h3>${title}</h3><table>` +
       rows.filter(([,v]) => v != null && v !== '').map(([k,v]) =>
         `<tr><td class="k">${k}</td><td>${v}</td></tr>`).join('') + '</table>';
+  }
+  // Betriebsstellen-Popup: Basisdaten + Liste der zugehörigen Strecken/Abschnitte (Lookup via STEL_ID).
+  function bstPopup(p) {
+    const base = tablePopup('Betriebsstelle', [
+      ['Name', p.BST_STELLE_NAME], ['RL100', p.BST_RL100],
+      ['km', p.LAGE_KM_V], ['TAF/TAP', p.BST_TAF_TAP_PC], ['Art', p.BST_STELLENART],
+    ]);
+    const list = stelIndex[p.STEL_ID] || [];
+    if (!list.length) return base;
+    const rows = list.map(a =>
+      `<tr><td class="k">${siEsc(a.nr)}</td><td>${siEsc(a.vonBis)}</td><td>${siEsc(a.kmVon)} → ${siEsc(a.kmBis)}</td></tr>`).join('');
+    return base +
+      `<div style="margin-top:8px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600">Zugehörige Strecken/Abschnitte (${list.length})</div>` +
+      `<div style="max-height:180px;overflow:auto"><table>${rows}</table></div>`;
   }
   function pointLayer(gj, opts) {
     return L.geoJSON(gj, {
@@ -302,7 +323,7 @@
     { file:'map_streckenuebergaenge.geojson', label:'Übergangsstellen', on:true, make:(gj)=>pointLayer(gj,{radius:3.5,fill:'#ffd23f',
         popup:p=>tablePopup('Übergangsstelle',[['Name',p.BST_STELLE_NAME],['Strecke 1',p.STRECKE1],['Strecke 2',p.STRECKE2],['RL100',p.REF_RL100],['Stellenart',p.BST_STELLENART]])}) },
     { file:'map_betriebsstellen.geojson', label:'Betriebsstellen', on:false, make:(gj)=>pointLayer(gj,{radius:3,fill:'#4aa3ff',
-        popup:p=>tablePopup('Betriebsstelle',[['Name',p.BST_STELLE_NAME],['RL100',p.BST_RL100],['Strecke',p.STRNR],['km',p.LAGE_KM_V],['TAF/TAP',p.BST_TAF_TAP_PC],['Art',p.BST_STELLENART]])}) },
+        popup:bstPopup}) },
     { file:'map_tunnel.geojson', label:'Tunnel', on:false, make:(gj)=>lineOverlay(gj,{color:'#b06be8',
         popup:p=>tablePopup('Tunnel: '+(p.ALG_TUNNELNAME??''),[['Strecke',p.DET_STR_NR],['Länge (m)',p.ALG_TUNNELLAENGE],['Art',p.ALG_TUNNELART],['TSI-konf.',p.ALG_TSI_KONF],['Notausgang',p.ALG_TUNN_NOTAUS_KZ]])}) },
     { file:'map_bruecken.geojson', label:'Brücken', on:false, make:(gj)=>lineOverlay(gj,{color:'#2ec76b',

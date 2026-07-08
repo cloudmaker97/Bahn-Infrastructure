@@ -56,5 +56,6 @@ export class ReloadableIsrData {
 
   readonly abschnitte: AbschnittLookup = {
     byStrecke: (nr: number): AbschnittProps[] => this.current.abschnitte.byStrecke(nr),
+    byStation: (stel: number): AbschnittProps[] => this.current.abschnitte.byStation(stel),
   };
 }
