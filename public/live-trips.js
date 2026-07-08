@@ -137,7 +137,7 @@ export function normalizeTrips(rawArray, nowMs) {
  */
 export function initLiveTrips({ map, L, renderer, overlayControl }) {
   const API = 'https://api.transitous.org/api/v6/map/trips';
-  const MIN_ZOOM = 9;
+  const MIN_ZOOM = 3;
   const REFETCH_MS = 30000;
   const DEBOUNCE_MS = 400;
 
