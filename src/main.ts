@@ -52,6 +52,14 @@ console.log(`Server läuft auf ${url}`);
 
 function shutdown(): void { httpServer.close(); process.exit(0); }
 
+// Container/Dienst-Stopp (Coolify/Docker senden SIGTERM) sauber behandeln.
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
+// Headless-Modus (Server ohne interaktive TUI): explizit via HEADLESS=1 oder
+// automatisch, wenn kein TTY vorhanden ist (typisch im Container).
+const HEADLESS = process.env.HEADLESS === '1' || process.env.HEADLESS === 'true' || !process.stdin.isTTY;
+
 /** Vollstaendiger Daten-Refresh: Rohdaten neu scrapen, Web-GeoJSON neu bauen, IsrData neu laden. */
 async function refreshData(): Promise<string> {
   await scrapeAll();
@@ -61,10 +69,14 @@ async function refreshData(): Promise<string> {
   return `${s.objects.toLocaleString('de-DE')} Objekte · ${s.rl100.toLocaleString('de-DE')} RL100 · ${s.edges.toLocaleString('de-DE')} Kanten`;
 }
 
-const tui = new TuiApp(data.search, new TuiRenderer(data.abschnitte), new InputHandler(), streckeninfo, {
-  getContext: () => ({ url, requestCount: httpServer.requestCount, totalObjects: data.totalObjects }),
-  onOpenBrowser: () => openInBrowser(url),
-  onRefreshData: refreshData,
-  onQuit: shutdown,
-});
-tui.start();
+if (HEADLESS) {
+  console.log('Headless-Modus: interaktive TUI deaktiviert – nur HTTP-Server läuft.');
+} else {
+  const tui = new TuiApp(data.search, new TuiRenderer(data.abschnitte), new InputHandler(), streckeninfo, {
+    getContext: () => ({ url, requestCount: httpServer.requestCount, totalObjects: data.totalObjects }),
+    onOpenBrowser: () => openInBrowser(url),
+    onRefreshData: refreshData,
+    onQuit: shutdown,
+  });
+  tui.start();
+}

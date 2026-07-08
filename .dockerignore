@@ -1,0 +1,17 @@
+# Nur das für Build (src, tsconfig, package*) und Runtime (public) Nötige in den Build-Kontext.
+node_modules
+dist
+data
+.git
+.github
+.claude
+.superpowers
+.playwright-mcp
+docs
+*.log
+*.md
+.DS_Store
+verify-bst.ts
+Dockerfile
+.dockerignore
+docker-compose.yml
