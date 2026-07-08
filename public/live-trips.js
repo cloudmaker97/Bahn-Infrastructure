@@ -88,23 +88,6 @@ export function categoryOf(mode) {
 /** Kategorie-Farben, abgesetzt von den Infrastruktur-Overlays. */
 export const CATEGORY_COLOR = { fern: '#d23f3f', regio: '#2ec76b', sbahn: '#2f7fe0' };
 
-/** Prefix einer transitous-ID bis zum ersten '_' (Dataset/Land, z. B. "de-DELFI"). */
-function idPrefix(id) {
-  return typeof id === 'string' ? (id.split('_')[0] || '') : '';
-}
-
-/**
- * Gehört das Segment zum deutschen Schienennetz? Transitous präfixt Halte-IDs mit
- * dem Länder-/Dataset-Code (de-DELFI, at-…, ch-…, nl-…). Deutsch = mindestens ein
- * Endpunkt mit "de-"-Dataset. Blendet rein ausländische Verbindungen aus.
- * @param {any} seg @returns {boolean}
- */
-export function isGermanNetwork(seg) {
-  const from = idPrefix(seg && seg.from && seg.from.stopId);
-  const to = idPrefix(seg && seg.to && seg.to.stopId);
-  return from.startsWith('de-') || to.startsWith('de-');
-}
-
 /**
  * Wandelt die Roh-Segmente von map/trips in normalisierte Zug-Objekte.
  * Verwirft Nicht-Eisenbahn, ungültige Zeiten und undekodierbare Polylinien.
@@ -117,7 +100,6 @@ export function normalizeTrips(rawArray, nowMs) {
   if (!Array.isArray(rawArray)) return out;
   for (const seg of rawArray) {
     if (!seg || !isRailMode(seg.mode)) continue;
-    if (!isGermanNetwork(seg)) continue; // nur deutsches Schienennetz
     const departMs = Date.parse(seg.departure);
     const arriveMs = Date.parse(seg.arrival);
     if (!Number.isFinite(departMs) || !Number.isFinite(arriveMs) || arriveMs <= departMs) continue;
