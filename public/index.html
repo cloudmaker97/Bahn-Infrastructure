@@ -668,7 +668,7 @@
   }
   </script>
   <script type="module">
-    import { initLiveTrips } from './live-trips.js';
+    import { initLiveTrips } from './live-trips.js?v=2';
     const ctx = window.__ISR_MAP__;
     if (ctx) initLiveTrips({ map: ctx.map, L: window.L, renderer: ctx.renderer, overlayControl: ctx.overlayControl, defaultOn: true });
   </script>

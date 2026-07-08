@@ -140,12 +140,13 @@ export function initLiveTrips({ map, L, renderer, overlayControl, defaultOn = fa
   const MIN_ZOOM = 3;
   const REFETCH_MS = 30000;
   const DEBOUNCE_MS = 400;
+  const ANIM_INTERVAL_MS = 200; // Marker ~5x/s bewegen statt pro Frame (Performance)
 
   const group = L.layerGroup();
   overlayControl.addOverlay(group, 'Live-Züge');
 
   const trains = new Map(); // id -> { zug, marker }
-  let active = false, rafId = null, refetchTimer = null, debounceTimer = null, inFlight = false;
+  let active = false, rafId = null, refetchTimer = null, debounceTimer = null, inFlight = false, lastAnim = 0;
 
   // Dezente Statuszeile unter der vorhandenen Streckeninfo-/Status-Zeile.
   const statusEl = document.createElement('div');
@@ -225,14 +226,20 @@ export function initLiveTrips({ map, L, renderer, overlayControl, defaultOn = fa
     }
   }
 
-  function animate() {
+  // Positionen zeitgetaktet (~5 fps) statt pro Frame aktualisieren: Züge bewegen sich
+  // auf der Karte nur wenige Pixel/Sekunde -> deutlich weniger Canvas-Redraws, gleiche Optik.
+  function animate(ts) {
     if (!active) { rafId = null; return; }
-    const now = Date.now();
-    for (const { zug, marker } of trains.values()) {
-      const span = zug.arriveMs - zug.departMs;
-      const frac = span > 0 ? (now - zug.departMs) / span : 0;
-      const pos = positionAt(zug.track, frac);
-      if (pos) marker.setLatLng(pos);
+    const t = ts || 0;
+    if (t - lastAnim >= ANIM_INTERVAL_MS) {
+      lastAnim = t;
+      const now = Date.now();
+      for (const { zug, marker } of trains.values()) {
+        const span = zug.arriveMs - zug.departMs;
+        const frac = span > 0 ? (now - zug.departMs) / span : 0;
+        const pos = positionAt(zug.track, frac);
+        if (pos) marker.setLatLng(pos);
+      }
     }
     rafId = requestAnimationFrame(animate);
   }
@@ -263,6 +270,18 @@ export function initLiveTrips({ map, L, renderer, overlayControl, defaultOn = fa
 
   map.on('overlayadd', (e) => { if (e.layer === group) start(); });
   map.on('overlayremove', (e) => { if (e.layer === group) stop(); });
+
+  // Im Hintergrund-Tab kein Nachladen (spart Netz/CPU); beim Zurückkehren sofort aktualisieren.
+  // (Die rAF-Animation drosselt der Browser im Hintergrund ohnehin automatisch.)
+  document.addEventListener('visibilitychange', () => {
+    if (!active) return;
+    if (document.hidden) {
+      if (refetchTimer) { clearInterval(refetchTimer); refetchTimer = null; }
+    } else {
+      fetchTrips();
+      if (!refetchTimer) refetchTimer = setInterval(fetchTrips, REFETCH_MS);
+    }
+  });
 
   // Standardmäßig eingeschaltet: Gruppe zur Karte hinzufügen (Häkchen in der
   // Ebenen-Steuerung) und den Loop direkt starten (programmatisches addTo feuert
