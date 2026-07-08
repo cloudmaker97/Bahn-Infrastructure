@@ -1,7 +1,7 @@
 // Selbsttest der reinen Live-Zug-Kernfunktionen (ohne Netz/Browser).
 // Laufbar mit: npx tsx public/live-trips.selftest.mjs
 import assert from 'node:assert';
-import { decodePolyline, buildTrack, positionAt } from './live-trips.js';
+import { decodePolyline, buildTrack, positionAt, isRailMode, categoryOf } from './live-trips.js';
 
 // --- 1) decodePolyline (Standard-Google-Testvektor, Präzision 5) ---
 {
@@ -25,6 +25,20 @@ import { decodePolyline, buildTrack, positionAt } from './live-trips.js';
 
   const drei = buildTrack([[0, 0], [0, 10], [0, 20]]);
   assert.ok(Math.abs(positionAt(drei, 0.5)[1] - 10) < 1e-6, 'gleichmäßiger 3-Punkt-Track: Mitte bei 10');
+}
+
+// --- 3) isRailMode / categoryOf ---
+{
+  assert.ok(isRailMode('HIGHSPEED_RAIL'), 'ICE ist Bahn');
+  assert.ok(isRailMode('REGIONAL_RAIL'), 'Regio ist Bahn');
+  assert.ok(isRailMode('SUBURBAN'), 'S-Bahn ist Bahn');
+  assert.ok(!isRailMode('BUS'), 'Bus ist keine Bahn');
+  assert.ok(!isRailMode('SUBWAY'), 'U-Bahn ausgeschlossen');
+  assert.ok(!isRailMode('FERRY'), 'Fähre ausgeschlossen');
+  assert.strictEqual(categoryOf('HIGHSPEED_RAIL'), 'fern');
+  assert.strictEqual(categoryOf('LONG_DISTANCE'), 'fern');
+  assert.strictEqual(categoryOf('REGIONAL_RAIL'), 'regio');
+  assert.strictEqual(categoryOf('SUBURBAN'), 'sbahn');
 }
 
 console.log('live-trips selftest: OK');

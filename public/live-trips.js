@@ -65,3 +65,25 @@ export function positionAt(track, frac) {
   const a = pts[i - 1], b = pts[i];
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 }
+
+/** Eisenbahn-Modi (alles andere – Bus, U-Bahn, Tram, Fähre – wird verworfen). */
+export const RAIL_MODES = new Set([
+  'HIGHSPEED_RAIL', 'LONG_DISTANCE', 'NIGHT_RAIL',
+  'REGIONAL_RAIL', 'REGIONAL_FAST_RAIL', 'SUBURBAN',
+]);
+
+/** @param {string} mode @returns {boolean} */
+export function isRailMode(mode) {
+  return RAIL_MODES.has(mode);
+}
+
+/** Grobkategorie für die Farbwahl. @returns {'fern'|'regio'|'sbahn'|'other'} */
+export function categoryOf(mode) {
+  if (mode === 'HIGHSPEED_RAIL' || mode === 'LONG_DISTANCE' || mode === 'NIGHT_RAIL') return 'fern';
+  if (mode === 'REGIONAL_RAIL' || mode === 'REGIONAL_FAST_RAIL') return 'regio';
+  if (mode === 'SUBURBAN') return 'sbahn';
+  return 'other';
+}
+
+/** Kategorie-Farben, abgesetzt von den Infrastruktur-Overlays. */
+export const CATEGORY_COLOR = { fern: '#d23f3f', regio: '#2ec76b', sbahn: '#2f7fe0' };
