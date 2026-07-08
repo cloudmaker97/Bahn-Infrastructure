@@ -498,6 +498,12 @@
   loadStreckenInfo();
   setInterval(loadStreckenInfo, 180000);   // alle 3 Minuten aktualisieren
 
+  // Live-Push: nach einem TUI-/TTL-Refresh sofort neu laden (Poll bleibt Sicherheitsnetz).
+  try {
+    const siEvents = new EventSource('/api/streckeninfo/events');
+    siEvents.addEventListener('streckeninfo', () => loadStreckenInfo());
+  } catch (e) { /* EventSource nicht verfügbar -> Poll genügt */ }
+
   // ---- Bedienung ----
   document.getElementById('colorMode').addEventListener('change', e => {
     mode = e.target.value;
