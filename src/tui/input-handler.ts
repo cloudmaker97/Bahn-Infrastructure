@@ -1,4 +1,5 @@
 // Uebersetzt rohe Tastatureingaben in abstrakte Aktionen. Verantwortung: Eingabe-Parsing (SRP).
+import type { TuiMode } from './tui-renderer.js';
 
 export type TuiAction =
   | { type: 'quit' }
@@ -11,14 +12,26 @@ export type TuiAction =
   | { type: 'back' }
   | { type: 'filter-next' }
   | { type: 'filter-prev' }
+  | { type: 'meldungen-open' }
+  | { type: 'refresh' }
   | { type: 'none' };
 
 export class InputHandler {
-  /** @param inDetail ob gerade die Detailansicht offen ist (aendert Bedeutung mancher Tasten). */
-  parse(key: string, inDetail: boolean): TuiAction {
+  /** @param mode aktueller TUI-Modus (aendert Bedeutung mancher Tasten). */
+  parse(key: string, mode: TuiMode): TuiAction {
     if (key === '\x03') return { type: 'quit' }; // Ctrl+C
 
-    if (inDetail) {
+    if (mode === 'meldungen') {
+      switch (key) {
+        case '\x1b': case 'q': case '\r': case '\n': return { type: 'back' };
+        case '\x1b[A': return { type: 'up' };
+        case '\x1b[B': return { type: 'down' };
+        case 'r': return { type: 'refresh' };
+        default: return { type: 'none' };
+      }
+    }
+
+    if (mode === 'detail') {
       switch (key) {
         case '\x1b': case 'q': case '\r': case '\n': return { type: 'back' };
         case '\x1b[A': return { type: 'up' };   // Detailansicht scrollen
@@ -27,7 +40,9 @@ export class InputHandler {
       }
     }
 
+    // Listen-/Suchmodus
     switch (key) {
+      case '\x02': return { type: 'meldungen-open' }; // Ctrl+B: Betriebslage
       case '\t': return { type: 'filter-next' };   // Tab: naechster Ergebnistyp
       case '\x1b[Z': return { type: 'filter-prev' }; // Shift+Tab: vorheriger Ergebnistyp
       case '\x1b[A': return { type: 'up' };

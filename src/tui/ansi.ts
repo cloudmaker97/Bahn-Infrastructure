@@ -20,3 +20,29 @@ export function pad(s: string, width: number): string {
   if (len > width) return stripAnsi(s).slice(0, Math.max(0, width - 1)) + '…';
   return s + ' '.repeat(width - len);
 }
+
+/**
+ * Wortumbruch auf sichtbare Breite. Eingabe OHNE ANSI-Codes.
+ * Ueberlange Einzelwoerter werden hart geschnitten. Leerer Text -> [''].
+ */
+export function wrap(text: string, width: number): string[] {
+  const w = Math.max(1, width);
+  const out: string[] = [];
+  for (const rawLine of String(text).split('\n')) {
+    let line = '';
+    for (const word of rawLine.split(/\s+/).filter((x) => x.length > 0)) {
+      let word2 = word;
+      while (word2.length > w) {
+        // Wort laenger als Zeile: harten Rest abschneiden.
+        if (line) { out.push(line); line = ''; }
+        out.push(word2.slice(0, w));
+        word2 = word2.slice(w);
+      }
+      if (!line) line = word2;
+      else if (line.length + 1 + word2.length <= w) line += ' ' + word2;
+      else { out.push(line); line = word2; }
+    }
+    out.push(line);
+  }
+  return out.length ? out : [''];
+}
