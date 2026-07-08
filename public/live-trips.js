@@ -135,7 +135,7 @@ export function normalizeTrips(rawArray, nowMs) {
  * Verkabelt das Live-Zug-Overlay mit der Karte. Einziger Teil mit Seiteneffekten.
  * @param {{ map: any, L: any, renderer: any, overlayControl: any }} deps
  */
-export function initLiveTrips({ map, L, renderer, overlayControl }) {
+export function initLiveTrips({ map, L, renderer, overlayControl, defaultOn = false }) {
   const API = 'https://api.transitous.org/api/v6/map/trips';
   const MIN_ZOOM = 3;
   const REFETCH_MS = 30000;
@@ -263,4 +263,9 @@ export function initLiveTrips({ map, L, renderer, overlayControl }) {
 
   map.on('overlayadd', (e) => { if (e.layer === group) start(); });
   map.on('overlayremove', (e) => { if (e.layer === group) stop(); });
+
+  // Standardmäßig eingeschaltet: Gruppe zur Karte hinzufügen (Häkchen in der
+  // Ebenen-Steuerung) und den Loop direkt starten (programmatisches addTo feuert
+  // kein 'overlayadd', daher start() explizit).
+  if (defaultOn) { group.addTo(map); start(); }
 }

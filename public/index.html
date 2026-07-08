@@ -324,7 +324,7 @@
   // Für das Live-Züge-Modul (separates ES-Modul) die geteilten Objekte bereitstellen.
   window.__ISR_MAP__ = { map, renderer, overlayControl };
   const overlays = [
-    { file:'map_streckenuebergaenge.geojson', label:'Übergangsstellen', on:true, make:(gj)=>pointLayer(gj,{radius:3.5,fill:'#ffd23f',
+    { file:'map_streckenuebergaenge.geojson', label:'Übergangsstellen', on:false, make:(gj)=>pointLayer(gj,{radius:3.5,fill:'#ffd23f',
         popup:p=>tablePopup('Übergangsstelle',[['Name',p.BST_STELLE_NAME],['Strecke 1',p.STRECKE1],['Strecke 2',p.STRECKE2],['RL100',p.REF_RL100],['Stellenart',p.BST_STELLENART]])}) },
     { file:'map_betriebsstellen.geojson', label:'Betriebsstellen', on:false, make:(gj)=>pointLayer(gj,{radius:3,fill:'#4aa3ff',
         popup:bstPopup}) },
@@ -350,9 +350,11 @@
   // Robuster Refresh-Ansatz: Pro Kategorie eine feste L.layerGroup(), die bei jedem
   // Load geleert und neu befüllt wird. Die Group bleibt in der Ebenen-Steuerung
   // registriert -> der An/Aus-Zustand bleibt erhalten, es entstehen keine Dubletten.
+  // Standard-Filter: nur Live-Züge + Störungen sichtbar. Baustellen/Streckenruhen
+  // sind registriert, aber standardmäßig ausgeschaltet (per Ebenen-Steuerung zuschaltbar).
   const siStoerungen = L.layerGroup().addTo(map);   // standardmäßig sichtbar
-  const siBaustellen = L.layerGroup().addTo(map);
-  const siRuhen      = L.layerGroup().addTo(map);
+  const siBaustellen = L.layerGroup();
+  const siRuhen      = L.layerGroup();
   let siOverlaysAdded = false;                       // Ebenen-Einträge nur einmal anlegen
   let siLastData = null;                             // letzte Streckeninfo-Antwort (fuer Nachziehen der Ruhen-Linien)
 
@@ -668,7 +670,7 @@
   <script type="module">
     import { initLiveTrips } from './live-trips.js';
     const ctx = window.__ISR_MAP__;
-    if (ctx) initLiveTrips({ map: ctx.map, L: window.L, renderer: ctx.renderer, overlayControl: ctx.overlayControl });
+    if (ctx) initLiveTrips({ map: ctx.map, L: window.L, renderer: ctx.renderer, overlayControl: ctx.overlayControl, defaultOn: true });
   </script>
 </body>
 </html>
