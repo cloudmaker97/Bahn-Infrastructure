@@ -79,9 +79,15 @@ export interface MeldungenProvider {
 }
 ```
 
-`StreckenInfoService` erfüllt diesen Port bereits. `StreckenInfoResult` und die DTOs
-werden aus `streckeninfo.ts` re-exportiert bzw. in `types.ts` referenziert (bestehende
-Import-Richtung beibehalten: `streckeninfo.ts` importiert aus `types.ts`).
+`StreckenInfoService` erfüllt diesen Port bereits.
+
+**Import-Richtung (wichtig):** `types.ts` ist der gemeinsame Vertrags-Ort, und
+`streckeninfo.ts` importiert bereits aus `types.ts` (nicht umgekehrt). Damit der Port
+`MeldungenProvider` auf den Datentyp verweisen kann, **wandern der öffentliche
+Datenvertrag `StreckenInfoResult`, `SammelmeldungDTO` und der neue `StoerungMeldungDTO`
+von `streckeninfo.ts` nach `types.ts`**. `streckeninfo.ts` importiert sie dann von dort
+(analog zu `FeatureCollection`/`GeoFeature`/`StationLookup`). Die reinen Funktionen und
+die `StreckenInfoService`-Klasse bleiben in `streckeninfo.ts`.
 
 ### 4. SSE-Push (Server → Browser)
 
