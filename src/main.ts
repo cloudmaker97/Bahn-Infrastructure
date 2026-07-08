@@ -6,6 +6,7 @@ import { IsrData } from './data/isr-data.js';
 import { StreckenInfoService } from './data/streckeninfo.js';
 import { RouteService } from './routing/route-service.js';
 import { ApiRouter } from './server/api-router.js';
+import { SseHub } from './server/sse-hub.js';
 import { StaticFileHandler } from './server/static-file-handler.js';
 import { HttpServer } from './server/http-server.js';
 import { TuiApp } from './tui/tui-app.js';
@@ -26,8 +27,14 @@ console.log(
 
 // Routing + HTTP verdrahten
 const routeService = new RouteService(data.graph, data.stations);
-const streckeninfo = new StreckenInfoService(data.stations, { apiBase: STRECKENINFO_API, wsUrl: STRECKENINFO_WS, ttlMs: STRECKENINFO_TTL_MS });
-const apiRouter = new ApiRouter(routeService, data.stations, data.search, streckeninfo);
+const sseHub = new SseHub();
+const streckeninfo = new StreckenInfoService(data.stations, {
+  apiBase: STRECKENINFO_API,
+  wsUrl: STRECKENINFO_WS,
+  ttlMs: STRECKENINFO_TTL_MS,
+  onRefresh: () => sseHub.broadcast('streckeninfo'),
+});
+const apiRouter = new ApiRouter(routeService, data.stations, data.search, streckeninfo, sseHub);
 const staticFiles = new StaticFileHandler(PUBLIC_DIR, DATA_WEB);
 const httpServer = new HttpServer(PORT, apiRouter, staticFiles);
 httpServer.listen();

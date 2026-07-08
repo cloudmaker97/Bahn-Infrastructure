@@ -3,6 +3,7 @@
 import type { ServerResponse } from 'node:http';
 import type { RouteService } from '../routing/route-service.js';
 import type { StreckenInfoService } from '../data/streckeninfo.js';
+import type { SseHub } from './sse-hub.js';
 import type { EntitySearch, RouteMode, StationSuggester } from '../types.js';
 
 export class ApiRouter {
@@ -11,6 +12,7 @@ export class ApiRouter {
     private suggester: StationSuggester,
     private search: EntitySearch,
     private streckeninfo: StreckenInfoService,
+    private sse: SseHub,
   ) {}
 
   /** Versucht, den Pfad als API zu behandeln. true = erledigt. */
@@ -32,6 +34,9 @@ export class ApiRouter {
         // Asynchron: Antwort wird geschrieben, sobald die (gecachten) strecken-info-
         // Daten geladen sind. getData() wirft nie – Fehler stehen im error-Feld.
         void this.streckeninfo.getData().then((r) => this.json(res, 200, r));
+        return true;
+      case '/api/streckeninfo/events':
+        this.sse.addClient(res); // Response bleibt offen (kein json())
         return true;
       default:
         return false;
