@@ -22,7 +22,12 @@ export class StaticFileHandler {
     if (!file.startsWith(base)) { res.writeHead(403); res.end('Forbidden'); return; }
     try {
       const buf = await readFile(file);
-      res.writeHead(200, { 'Content-Type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream' });
+      res.writeHead(200, {
+        'Content-Type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream',
+        // Immer revalidieren: verhindert, dass der Browser veraltete HTML/JS/CSS-Dateien
+        // aus dem Cache serviert (sonst kommen Frontend-Änderungen nicht zuverlässig an).
+        'Cache-Control': 'no-cache',
+      });
       res.end(buf);
     } catch {
       res.writeHead(404); res.end('Not found: ' + pathname);
