@@ -33,3 +33,6 @@ jobs:
 
       - name: Selftest – TUI
         run: npx tsx src/tui/tui.selftest.ts
+
+      - name: Selftest – Live-Züge
+        run: npx tsx public/live-trips.selftest.mjs
