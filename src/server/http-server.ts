@@ -7,6 +7,7 @@ import type { StaticFileHandler } from './static-file-handler.js';
 export class HttpServer {
   private server: Server;
   private requests = 0;
+  private _boundPort = 0;
 
   constructor(
     private port: number,
@@ -15,13 +16,24 @@ export class HttpServer {
   ) {
     this.server = createServer((req, res) => {
       this.requests++;
-      const u = new URL(req.url ?? '/', `http://localhost:${this.port}`);
+      const u = new URL(req.url ?? '/', 'http://localhost');
       if (this.api.handle(u.pathname, u.searchParams, res)) return;
       void this.staticFiles.serve(decodeURIComponent(u.pathname), res);
     });
   }
 
-  listen(): void { this.server.listen(this.port); }
+  /** Startet den Server; loest mit dem tatsaechlich gebundenen Port auf (bei port=0 vom OS vergeben). */
+  listen(): Promise<number> {
+    return new Promise((resolve) => {
+      this.server.listen(this.port, () => {
+        const addr = this.server.address();
+        this._boundPort = addr && typeof addr === 'object' ? addr.port : this.port;
+        resolve(this._boundPort);
+      });
+    });
+  }
   close(): void { this.server.close(); }
   get requestCount(): number { return this.requests; }
+  /** Tatsaechlich gebundener Port (erst nach listen() gueltig). */
+  get boundPort(): number { return this._boundPort; }
 }

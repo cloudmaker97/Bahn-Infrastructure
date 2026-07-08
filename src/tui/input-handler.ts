@@ -14,12 +14,16 @@ export type TuiAction =
   | { type: 'filter-prev' }
   | { type: 'meldungen-open' }
   | { type: 'refresh' }
+  | { type: 'open-browser' }
+  | { type: 'refresh-data' }
   | { type: 'none' };
 
 export class InputHandler {
   /** @param mode aktueller TUI-Modus (aendert Bedeutung mancher Tasten). */
   parse(key: string, mode: TuiMode): TuiAction {
     if (key === '\x03') return { type: 'quit' }; // Ctrl+C
+    if (key === '\x0f') return { type: 'open-browser' }; // Ctrl+O: Karte im Systembrowser oeffnen
+    if (key === '\x12') return { type: 'refresh-data' };  // Ctrl+R: ISR-Daten neu scrapen/laden (global)
 
     if (mode === 'meldungen') {
       switch (key) {

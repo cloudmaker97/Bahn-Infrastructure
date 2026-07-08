@@ -8,14 +8,17 @@ import type { EntitySearch, MeldungenProvider } from '../types.js';
 export interface TuiAppOptions {
   getContext: () => TuiContext;
   onQuit: () => void;
+  onOpenBrowser?: () => void;               // Karte im Systembrowser oeffnen (Ctrl+O)
+  onRefreshData?: () => Promise<string>;    // ISR-Daten neu scrapen/bauen/laden -> Kurzstatistik (Ctrl+R)
 }
 
 export class TuiApp {
   private state: TuiState = {
     query: '', results: [], sel: 0, mode: 'list', detailScroll: 0, filter: null,
-    meldungen: { status: 'idle', data: null }, meldungenScroll: 0,
+    meldungen: { status: 'idle', data: null }, meldungenScroll: 0, notice: null,
   };
   private out = process.stdout;
+  private dataRefreshing = false;
 
   constructor(
     private search: EntitySearch,
@@ -39,6 +42,7 @@ export class TuiApp {
   private onKey(key: string): void {
     const action = this.input.parse(key, this.state.mode);
     const s = this.state;
+    s.notice = null; // transiente Statusmeldung bei jeder Eingabe zuruecksetzen
     switch (action.type) {
       case 'quit': this.cleanup(); this.opts.onQuit(); return;
       case 'char': s.query += action.ch; this.updateResults(); break;
@@ -60,6 +64,8 @@ export class TuiApp {
       case 'filter-prev': this.cycleFilter(-1); break;
       case 'meldungen-open': this.openMeldungen(); break;
       case 'refresh': this.refreshMeldungen(); break;
+      case 'open-browser': this.opts.onOpenBrowser?.(); s.notice = 'Karte im Browser geöffnet.'; break;
+      case 'refresh-data': this.refreshData(); break;
       case 'none': return;
     }
     this.draw();
@@ -79,6 +85,23 @@ export class TuiApp {
     if (this.state.mode !== 'meldungen') return;
     this.state.meldungen = { status: 'refreshing', data: this.state.meldungen.data };
     this.loadMeldungen(true);
+  }
+
+  /** Ctrl+R: ISR-Daten vollstaendig neu scrapen/bauen/laden (laeuft im Hintergrund). */
+  private refreshData(): void {
+    if (this.dataRefreshing || !this.opts.onRefreshData) return;
+    this.dataRefreshing = true;
+    this.state.notice = 'ISR-Daten werden neu gescraped und gebaut … (dauert einige Minuten)';
+    this.draw();
+    void this.opts.onRefreshData().then((summary) => {
+      this.state.notice = 'Daten aktualisiert: ' + summary;
+      this.updateResults(); // laufende Suche mit den neuen Daten neu ausfuehren
+    }).catch((e) => {
+      this.state.notice = 'Daten-Refresh fehlgeschlagen: ' + (e instanceof Error ? e.message : String(e));
+    }).finally(() => {
+      this.dataRefreshing = false;
+      this.draw();
+    });
   }
 
   /** Holt Daten (ggf. erzwungen) und zeichnet neu, wenn die Ansicht noch offen ist. */

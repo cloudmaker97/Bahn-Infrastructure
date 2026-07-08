@@ -8,7 +8,9 @@ export const DATA_RAW = join(ROOT, 'data', 'raw');
 export const DATA_WEB = join(ROOT, 'data', 'web');
 export const PUBLIC_DIR = join(ROOT, 'public');
 
-export const PORT = 8000;
+// Standardmaessig 0 -> das OS vergibt beim Start einen freien (zufaelligen) Port.
+// Mit der Umgebungsvariable PORT laesst sich ein fester Port erzwingen (z. B. Tests).
+export const PORT = process.env.PORT ? Number(process.env.PORT) : 0;
 export const DEFAULT_SPEED = 50; // km/h Fallback fuer Abschnitte ohne Geschwindigkeit
 
 export const WFS_BASE = 'https://geoviewer.deutschebahn.com/geoviewer-geoserver/ows';

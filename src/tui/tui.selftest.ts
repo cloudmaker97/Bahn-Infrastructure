@@ -34,6 +34,11 @@ import type { AbschnittLookup } from '../types.js';
   // Modus-Abweisung: Ctrl+B tut in Meldungen nichts, 'r' ist in der Liste nur ein Suchzeichen.
   assert.deepStrictEqual(h.parse('\x02', 'meldungen'), { type: 'none' }, 'Ctrl+B ohne Wirkung in Meldungen');
   assert.deepStrictEqual(h.parse('r', 'list'), { type: 'char', ch: 'r' }, 'r ist Suchzeichen in Liste');
+  // Globale Shortcuts (jeder Modus): Ctrl+O Browser, Ctrl+R Daten-Refresh
+  assert.deepStrictEqual(h.parse('\x0f', 'list'), { type: 'open-browser' }, 'Ctrl+O -> Browser oeffnen');
+  assert.deepStrictEqual(h.parse('\x12', 'list'), { type: 'refresh-data' }, 'Ctrl+R -> Daten-Refresh');
+  assert.deepStrictEqual(h.parse('\x0f', 'meldungen'), { type: 'open-browser' }, 'Ctrl+O auch in Meldungen');
+  assert.deepStrictEqual(h.parse('\x12', 'detail'), { type: 'refresh-data' }, 'Ctrl+R auch in Detail');
 }
 
 // --- Renderer: renderMeldungen ---
@@ -44,7 +49,7 @@ import type { AbschnittLookup } from '../types.js';
 
   const baseState = (meldungen: MeldungenView): TuiState => ({
     query: '', results: [], sel: 0, mode: 'meldungen', detailScroll: 0,
-    filter: null, meldungen, meldungenScroll: 0,
+    filter: null, meldungen, meldungenScroll: 0, notice: null,
   });
 
   // loading
@@ -94,6 +99,11 @@ import type { AbschnittLookup } from '../types.js';
   const emptyData = { ...data, sammelmeldungen: [], stoerungenListe: [], error: null };
   const empty = stripAnsi(rend.render(baseState({ status: 'ready', data: emptyData }), ctx, 100, 24));
   assert.match(empty, /Keine aktuellen Meldungen/, 'Leer-Hinweis');
+
+  // notice-Statusmeldung wird im Kopf angezeigt (z. B. nach Ctrl+O / Ctrl+R)
+  const withNotice: TuiState = { ...baseState({ status: 'ready', data: emptyData }), mode: 'list', notice: 'Karte im Browser geöffnet.' };
+  const noticeFrame = stripAnsi(rend.render(withNotice, ctx, 100, 24));
+  assert.match(noticeFrame, /Karte im Browser geöffnet/, 'notice im Kopf sichtbar');
 }
 
 console.log('TUI-Teil A+B (wrap, input, renderMeldungen) OK');

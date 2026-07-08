@@ -20,6 +20,7 @@ export interface TuiState {
   filter: SearchEntry['kind'] | null; // null = ALLE
   meldungen: MeldungenView;
   meldungenScroll: number;
+  notice: string | null; // transiente Statusmeldung (Browser geoeffnet, Daten-Refresh …)
 }
 
 /** Zyklus der Filter fuer Tab/Shift+Tab: ALLE (null) + alle Ergebnistypen. */
@@ -42,6 +43,7 @@ export class TuiRenderer {
 
     lines.push(bold(c('36', ' ISR · Streckennetz Deutschland — Recherche')));
     lines.push(dim(` Karte: ${ctx.url}   ·   HTTP-Anfragen: ${ctx.requestCount}   ·   ${ctx.totalObjects.toLocaleString('de-DE')} Objekte`));
+    if (state.notice) lines.push(c('33', ' ▸ ' + state.notice));
     lines.push(dim('─'.repeat(W)));
 
     const cursor = state.mode === 'list' ? inv(' ') : ' ';
@@ -58,7 +60,7 @@ export class TuiRenderer {
       ? '↑↓ scrollen   ·   Esc/Enter: zurück   ·   Ctrl+C: beenden'
       : state.mode === 'meldungen'
       ? '↑↓ scrollen   ·   r: aktualisieren   ·   Esc/q: zurück   ·   Ctrl+C: beenden'
-      : '↑↓ wählen   ·   Enter: Details   ·   Ctrl+B: Meldungen   ·   Tab: Typ filtern   ·   Esc: leeren   ·   Ctrl+C: beenden';
+      : '↑↓ wählen   ·   Enter: Details   ·   Ctrl+B: Meldungen   ·   Tab: filtern   ·   Ctrl+O: Browser   ·   Ctrl+R: Daten neu   ·   Ctrl+C: beenden';
     lines[H - 1] = dim(' ' + footer);
 
     let buf = `${ESC}[H`;
