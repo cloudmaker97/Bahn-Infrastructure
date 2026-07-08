@@ -319,6 +319,8 @@
   // Auf schmalen Viewports das Ebenen-Feld als kompaktes Icon (antippbar), sonst offen
   const narrowVP = window.matchMedia('(max-width:640px)').matches;
   const overlayControl = L.control.layers(null, {}, { collapsed: narrowVP, position: 'topright' }).addTo(map);
+  // Für das Live-Züge-Modul (separates ES-Modul) die geteilten Objekte bereitstellen.
+  window.__ISR_MAP__ = { map, renderer, overlayControl };
   const overlays = [
     { file:'map_streckenuebergaenge.geojson', label:'Übergangsstellen', on:true, make:(gj)=>pointLayer(gj,{radius:3.5,fill:'#ffd23f',
         popup:p=>tablePopup('Übergangsstelle',[['Name',p.BST_STELLE_NAME],['Strecke 1',p.STRECKE1],['Strecke 2',p.STRECKE2],['RL100',p.REF_RL100],['Stellenart',p.BST_STELLENART]])}) },
@@ -660,6 +662,11 @@
     panel.classList.add('collapsed');
     document.getElementById('panelToggle').textContent = '▸';
   }
+  </script>
+  <script type="module">
+    import { initLiveTrips } from './live-trips.js';
+    const ctx = window.__ISR_MAP__;
+    if (ctx) initLiveTrips({ map: ctx.map, L: window.L, renderer: ctx.renderer, overlayControl: ctx.overlayControl });
   </script>
 </body>
 </html>

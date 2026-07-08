@@ -130,3 +130,137 @@ export function normalizeTrips(rawArray, nowMs) {
   }
   return out;
 }
+
+/**
+ * Verkabelt das Live-Zug-Overlay mit der Karte. Einziger Teil mit Seiteneffekten.
+ * @param {{ map: any, L: any, renderer: any, overlayControl: any }} deps
+ */
+export function initLiveTrips({ map, L, renderer, overlayControl }) {
+  const API = 'https://api.transitous.org/api/v6/map/trips';
+  const MIN_ZOOM = 9;
+  const REFETCH_MS = 30000;
+  const DEBOUNCE_MS = 400;
+
+  const group = L.layerGroup();
+  overlayControl.addOverlay(group, 'Live-Züge');
+
+  const trains = new Map(); // id -> { zug, marker }
+  let active = false, rafId = null, refetchTimer = null, debounceTimer = null, inFlight = false;
+
+  // Dezente Statuszeile unter der vorhandenen Streckeninfo-/Status-Zeile.
+  const statusEl = document.createElement('div');
+  statusEl.id = 'ltStatus';
+  statusEl.style.cssText = 'font-size:11px;color:var(--muted);margin-top:6px;';
+  const anchor = document.getElementById('siStatus') || document.getElementById('status');
+  if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(statusEl, anchor.nextSibling);
+  const setStatus = (msg) => { statusEl.textContent = msg; };
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const fmt = (ms) => new Date(ms).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+
+  function popupHtml(zug) {
+    const d = zug.delayMin;
+    const delayTxt = d > 0 ? `<span style="color:#d23f3f">+${d} min</span>` : (d < 0 ? `${d} min` : 'pünktlich');
+    return `<h3>${esc(zug.name || 'Zug')}</h3><table>` +
+      `<tr><td class="k">von → nach</td><td>${esc(zug.fromName)} → ${esc(zug.toName)}</td></tr>` +
+      `<tr><td class="k">planmäßig</td><td>ab ${fmt(zug.schedDepartMs)} · an ${fmt(zug.schedArriveMs)}</td></tr>` +
+      `<tr><td class="k">aktuell</td><td>ab ${fmt(zug.departMs)} · an ${fmt(zug.arriveMs)}</td></tr>` +
+      `<tr><td class="k">Verspätung</td><td>${delayTxt}</td></tr>` +
+      `<tr><td class="k">Echtzeit</td><td>${zug.realTime ? 'ja' : 'nein (Plan)'}</td></tr>` +
+      `</table>`;
+  }
+
+  function markerFor(zug) {
+    const color = CATEGORY_COLOR[zug.category] || '#8894a0';
+    const m = L.circleMarker([0, 0], { renderer, radius: 5, color: '#ffffff', weight: 1.5, fillColor: color, fillOpacity: 0.95 });
+    if (zug.name) m.bindTooltip(zug.name, { direction: 'top', opacity: 0.9 });
+    m.bindPopup(() => popupHtml(zug), { maxWidth: 300 });
+    return m;
+  }
+
+  function clearTrains() { group.clearLayers(); trains.clear(); }
+
+  function syncTrains(list) {
+    const seen = new Set();
+    for (const zug of list) {
+      seen.add(zug.id);
+      const existing = trains.get(zug.id);
+      if (existing) { existing.zug = zug; } // Zeiten/Track aktualisieren, Marker behalten
+      else {
+        const marker = markerFor(zug);
+        marker.addTo(group);
+        trains.set(zug.id, { zug, marker });
+      }
+    }
+    for (const [id, entry] of trains) {
+      if (!seen.has(id)) { group.removeLayer(entry.marker); trains.delete(id); }
+    }
+  }
+
+  async function fetchTrips() {
+    if (!active || inFlight) return;
+    if (map.getZoom() < MIN_ZOOM) {
+      clearTrains();
+      setStatus(`Live-Züge: zum Anzeigen näher heranzoomen (ab Zoom ${MIN_ZOOM})`);
+      return;
+    }
+    inFlight = true;
+    try {
+      const b = map.getBounds();
+      const sw = b.getSouthWest(), ne = b.getNorthEast();
+      const now = new Date();
+      const end = new Date(now.getTime() + REFETCH_MS);
+      const url = `${API}?min=${sw.lat},${sw.lng}&max=${ne.lat},${ne.lng}` +
+        `&startTime=${now.toISOString()}&endTime=${end.toISOString()}&zoom=${map.getZoom()}`;
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const raw = await resp.json();
+      const list = normalizeTrips(raw, now.getTime());
+      syncTrains(list);
+      setStatus(`Live-Züge: ${list.length} im Ausschnitt · Stand ${now.toLocaleTimeString('de-DE')}`);
+    } catch (e) {
+      setStatus('Live-Züge nicht verfügbar (' + ((e && e.message) || e) + ')');
+    } finally {
+      inFlight = false;
+    }
+  }
+
+  function animate() {
+    if (!active) { rafId = null; return; }
+    const now = Date.now();
+    for (const { zug, marker } of trains.values()) {
+      const span = zug.arriveMs - zug.departMs;
+      const frac = span > 0 ? (now - zug.departMs) / span : 0;
+      const pos = positionAt(zug.track, frac);
+      if (pos) marker.setLatLng(pos);
+    }
+    rafId = requestAnimationFrame(animate);
+  }
+
+  function scheduleRefetch() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(fetchTrips, DEBOUNCE_MS);
+  }
+
+  function start() {
+    if (active) return;
+    active = true;
+    fetchTrips();
+    refetchTimer = setInterval(fetchTrips, REFETCH_MS);
+    map.on('moveend zoomend', scheduleRefetch);
+    if (rafId == null) rafId = requestAnimationFrame(animate);
+  }
+
+  function stop() {
+    active = false;
+    if (refetchTimer) { clearInterval(refetchTimer); refetchTimer = null; }
+    clearTimeout(debounceTimer);
+    map.off('moveend zoomend', scheduleRefetch);
+    if (rafId != null) { cancelAnimationFrame(rafId); rafId = null; }
+    clearTrains();
+    setStatus('');
+  }
+
+  map.on('overlayadd', (e) => { if (e.layer === group) start(); });
+  map.on('overlayremove', (e) => { if (e.layer === group) stop(); });
+}
