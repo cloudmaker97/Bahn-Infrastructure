@@ -692,6 +692,7 @@
   // Da Züge auf den Strecken liegen, überdeckt beim Linksklick das oberste Objekt die
   // darunterliegenden. Rechtsklick sammelt alle Objekte mit Info-Popup im Umkreis.
   const NEARBY_R = 14; // Pixel-Radius um den Klickpunkt
+  const flatLL = (a) => Array.isArray(a) ? a.flatMap(flatLL) : [a];   // (Multi)LineString -> flache LatLng-Liste
   function describeNearby(layer) {
     const color = (layer.options && (layer.options.fillColor || layer.options.color)) || '#8894a0';
     const p = layer.feature && layer.feature.properties;
@@ -722,8 +723,13 @@
       } else if (layer instanceof L.Polyline) {
         try {
           if (layer.getBounds && !layer.getBounds().pad(0.02).contains(e.latlng)) return; // schnelle Vorauswahl
-          const cp = layer.closestLayerPoint(clickLp);
-          if (cp) d = cp.distance;
+          const pts = flatLL(layer.getLatLngs()).filter((p) => p && p.lat != null);
+          for (let i = 1; i < pts.length; i++) {
+            const a = map.latLngToLayerPoint(pts[i - 1]);
+            const b = map.latLngToLayerPoint(pts[i]);
+            const dd = L.LineUtil.pointToSegmentDistance(clickLp, a, b);
+            if (dd < d) d = dd;
+          }
         } catch (_) { return; }
       } else return;
       if (d <= NEARBY_R) hits.push({ layer, d });
