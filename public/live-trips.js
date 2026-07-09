@@ -108,6 +108,20 @@ export function pointInBoundary(lon, lat, rings) {
   return false;
 }
 
+/** Umschließende Bounding-Box aller Ring-Punkte ([lon,lat]). Rein. */
+export function ringsBbox(rings) {
+  let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+  for (const ring of rings || []) {
+    for (const p of ring) {
+      if (p[0] < minLon) minLon = p[0];
+      if (p[0] > maxLon) maxLon = p[0];
+      if (p[1] < minLat) minLat = p[1];
+      if (p[1] > maxLat) maxLat = p[1];
+    }
+  }
+  return { minLon, minLat, maxLon, maxLat };
+}
+
 /** Extrahiert die äußeren Ringe aus einem (Multi)Polygon-GeoJSON. Rein. */
 export function boundaryRings(geojson) {
   const rings = [];
@@ -194,12 +208,13 @@ export function initLiveTrips({ map, L, renderer, overlayControl, defaultOn = fa
   const trains = new Map(); // id -> { zug, marker }
   let active = false, rafId = null, refetchTimer = null, debounceTimer = null, inFlight = false, lastAnim = 0;
   let boundary = null; // äußere Ringe der DE-Landesgrenze (einmalig geladen)
+  let deBbox = null;   // umschließende Bounding-Box der Grenze (zum Begrenzen der API-Anfrage)
 
-  // Deutschland-Grenze einmalig laden -> nur Züge rendern, die in Deutschland fahren.
+  // Deutschland-Grenze einmalig laden -> nur Züge rendern/abfragen, die in Deutschland liegen.
   fetch('/de-boundary.geojson')
     .then((r) => r.json())
-    .then((gj) => { boundary = boundaryRings(gj); if (active) fetchTrips(); })
-    .catch(() => { /* ohne Grenze: es wird nicht geofiltert */ });
+    .then((gj) => { boundary = boundaryRings(gj); deBbox = ringsBbox(boundary); if (active) fetchTrips(); })
+    .catch(() => { /* ohne Grenze: kein Geofilter, voller Viewport */ });
 
   // Dezente Statuszeile unter der vorhandenen Streckeninfo-/Status-Zeile.
   const statusEl = document.createElement('div');
@@ -260,11 +275,22 @@ export function initLiveTrips({ map, L, renderer, overlayControl, defaultOn = fa
     }
     inFlight = true;
     try {
+      // Anfrage-Ausschnitt = Viewport, aber auf die Deutschland-Bounding-Box begrenzt
+      // (nur Deutschland abrufen; kein Traffic für Nachbarländer).
       const b = map.getBounds();
-      const sw = b.getSouthWest(), ne = b.getNorthEast();
+      let minLat = b.getSouth(), minLng = b.getWest(), maxLat = b.getNorth(), maxLng = b.getEast();
+      if (deBbox) {
+        minLat = Math.max(minLat, deBbox.minLat); minLng = Math.max(minLng, deBbox.minLon);
+        maxLat = Math.min(maxLat, deBbox.maxLat); maxLng = Math.min(maxLng, deBbox.maxLon);
+        if (minLat >= maxLat || minLng >= maxLng) { // Ausschnitt vollständig außerhalb DE
+          clearTrains();
+          setStatus('Live-Züge: Ausschnitt liegt außerhalb Deutschlands');
+          return;
+        }
+      }
       const now = new Date();
       const end = new Date(now.getTime() + REFETCH_MS);
-      const url = `${API}?min=${sw.lat},${sw.lng}&max=${ne.lat},${ne.lng}` +
+      const url = `${API}?min=${minLat},${minLng}&max=${maxLat},${maxLng}` +
         `&startTime=${now.toISOString()}&endTime=${end.toISOString()}&zoom=${map.getZoom()}`;
       const resp = await fetch(url);
       if (!resp.ok) throw new Error('HTTP ' + resp.status);

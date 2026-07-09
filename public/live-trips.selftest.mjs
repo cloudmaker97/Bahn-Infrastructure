@@ -1,7 +1,7 @@
 // Selbsttest der reinen Live-Zug-Kernfunktionen (ohne Netz/Browser).
 // Laufbar mit: npx tsx public/live-trips.selftest.mjs
 import assert from 'node:assert';
-import { decodePolyline, buildTrack, positionAt, isRailMode, categoryOf, normalizeTrips, pointInRing, pointInBoundary, boundaryRings } from './live-trips.js';
+import { decodePolyline, buildTrack, positionAt, isRailMode, categoryOf, normalizeTrips, pointInRing, pointInBoundary, boundaryRings, ringsBbox } from './live-trips.js';
 
 // --- 1) decodePolyline (Standard-Google-Testvektor, Präzision 5) ---
 {
@@ -82,6 +82,8 @@ import { decodePolyline, buildTrack, positionAt, isRailMode, categoryOf, normali
   ] };
   const rings = boundaryRings(gj);
   assert.strictEqual(rings.length, 1, 'ein äußerer Ring extrahiert');
+  const bb = ringsBbox(rings);
+  assert.deepStrictEqual(bb, { minLon: 0, minLat: 0, maxLon: 10, maxLat: 10 }, 'Bounding-Box des Quadrats');
 
   // Polyline im Quadrat (Punkte bei lat≈0.0002..): '_p~iF~ps|U…' liegt weit weg (Kalifornien) -> raus.
   // Ein Zug MIT Punkt im Quadrat: kleine Polyline nahe [lat 5, lon 5].
