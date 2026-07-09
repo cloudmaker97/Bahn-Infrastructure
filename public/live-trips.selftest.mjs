@@ -1,7 +1,7 @@
 // Selbsttest der reinen Live-Zug-Kernfunktionen (ohne Netz/Browser).
 // Laufbar mit: npx tsx public/live-trips.selftest.mjs
 import assert from 'node:assert';
-import { decodePolyline, buildTrack, positionAt, isRailMode, categoryOf, normalizeTrips } from './live-trips.js';
+import { decodePolyline, buildTrack, positionAt, isRailMode, categoryOf, normalizeTrips, pointInRing, pointInBoundary, boundaryRings } from './live-trips.js';
 
 // --- 1) decodePolyline (Standard-Google-Testvektor, Präzision 5) ---
 {
@@ -66,6 +66,34 @@ import { decodePolyline, buildTrack, positionAt, isRailMode, categoryOf, normali
   assert.strictEqual(z.toName, 'B-Dorf');
   assert.ok(z.track.points.length >= 2, 'Track hat >= 2 Punkte');
   assert.ok(typeof z.id === 'string' && z.id.length > 0, 'id gesetzt');
+}
+
+// --- 6) Geografischer Filter: Point-in-Polygon + Grenz-Filter in normalizeTrips ---
+{
+  const square = [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]; // [lon,lat]-Ring
+  assert.ok(pointInRing(5, 5, square), 'Mitte drin');
+  assert.ok(!pointInRing(20, 20, square), 'außerhalb raus');
+  assert.ok(pointInBoundary(5, 5, [square]), 'in einem der Ringe');
+  assert.ok(!pointInBoundary(-5, -5, [square]), 'in keinem Ring');
+  assert.ok(pointInBoundary(999, 999, null), 'ohne Grenze -> kein Filter (true)');
+
+  const gj = { type: 'FeatureCollection', features: [
+    { type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: [[square]] } },
+  ] };
+  const rings = boundaryRings(gj);
+  assert.strictEqual(rings.length, 1, 'ein äußerer Ring extrahiert');
+
+  // Polyline im Quadrat (Punkte bei lat≈0.0002..): '_p~iF~ps|U…' liegt weit weg (Kalifornien) -> raus.
+  // Ein Zug MIT Punkt im Quadrat: kleine Polyline nahe [lat 5, lon 5].
+  // encodePolyline gibt es hier nicht; daher testen wir den Filter über decodePolyline-Ergebnis:
+  const raw = [
+    { mode: 'REGIONAL_RAIL', departure: '2026-07-08T18:29:00Z', arrival: '2026-07-08T19:00:00Z',
+      polyline: '_p~iF~ps|U_ulLnnqC', trips: [{ tripId: 'usa', displayName: 'USA' }] }, // Kalifornien -> außerhalb
+  ];
+  const drin = normalizeTrips(raw, 0, null);           // ohne Grenze: behalten
+  const draussen = normalizeTrips(raw, 0, [square]);   // mit Grenze (Quadrat 0..10): raus
+  assert.strictEqual(drin.length, 1, 'ohne Grenze behalten');
+  assert.strictEqual(draussen.length, 0, 'außerhalb der Grenze gefiltert');
 }
 
 console.log('live-trips selftest: OK');

@@ -88,14 +88,51 @@ export function categoryOf(mode) {
 /** Kategorie-Farben, abgesetzt von den Infrastruktur-Overlays. */
 export const CATEGORY_COLOR = { fern: '#d23f3f', regio: '#2ec76b', sbahn: '#2f7fe0' };
 
+// --- Geografischer Filter: Point-in-Polygon gegen die Deutschland-Grenze ---
+
+/** Ray-Casting: liegt [lon, lat] innerhalb eines Rings ([[lon,lat],…])? Rein. */
+export function pointInRing(lon, lat, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    if (((yi > lat) !== (yj > lat)) && (lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+
+/** Liegt [lon, lat] in irgendeinem der (äußeren) Ringe? Ohne Ringe: true (kein Filter). */
+export function pointInBoundary(lon, lat, rings) {
+  if (!rings || !rings.length) return true;
+  for (const ring of rings) if (pointInRing(lon, lat, ring)) return true;
+  return false;
+}
+
+/** Extrahiert die äußeren Ringe aus einem (Multi)Polygon-GeoJSON. Rein. */
+export function boundaryRings(geojson) {
+  const rings = [];
+  const feats = geojson && geojson.type === 'FeatureCollection'
+    ? geojson.features
+    : [geojson && geojson.type === 'Feature' ? geojson : { geometry: geojson }];
+  for (const f of feats) {
+    const g = (f && f.geometry) || f;
+    if (!g) continue;
+    if (g.type === 'Polygon') rings.push(g.coordinates[0]);
+    else if (g.type === 'MultiPolygon') for (const poly of g.coordinates) rings.push(poly[0]);
+  }
+  return rings;
+}
+
 /**
  * Wandelt die Roh-Segmente von map/trips in normalisierte Zug-Objekte.
  * Verwirft Nicht-Eisenbahn, ungültige Zeiten und undekodierbare Polylinien.
  * @param {any[]} rawArray
  * @param {number} nowMs  (reserviert; aktuell ohne Wirkung auf das Ergebnis)
+ * @param {[number,number][][]|null} rings  optionale Landesgrenze (äußere Ringe);
+ *        wenn gesetzt, werden nur Züge behalten, deren Fahrweg Deutschland berührt.
  * @returns {object[]}
  */
-export function normalizeTrips(rawArray, nowMs) {
+export function normalizeTrips(rawArray, nowMs, rings = null) {
   const out = [];
   if (!Array.isArray(rawArray)) return out;
   for (const seg of rawArray) {
@@ -106,6 +143,8 @@ export function normalizeTrips(rawArray, nowMs) {
     if (typeof seg.polyline !== 'string' || seg.polyline.length === 0) continue;
     const coords = decodePolyline(seg.polyline);
     if (coords.length < 2) continue;
+    // Nur Züge, deren Fahrweg innerhalb der deutschen Landesgrenze verläuft (coords = [lat,lon]).
+    if (rings && rings.length && !coords.some((c) => pointInBoundary(c[1], c[0], rings))) continue;
 
     const trip = (Array.isArray(seg.trips) && seg.trips[0]) ? seg.trips[0] : {};
     const schedDepartMs = Date.parse(seg.scheduledDeparture);
@@ -147,6 +186,13 @@ export function initLiveTrips({ map, L, renderer, overlayControl, defaultOn = fa
 
   const trains = new Map(); // id -> { zug, marker }
   let active = false, rafId = null, refetchTimer = null, debounceTimer = null, inFlight = false, lastAnim = 0;
+  let boundary = null; // äußere Ringe der DE-Landesgrenze (einmalig geladen)
+
+  // Deutschland-Grenze einmalig laden -> nur Züge rendern, die in Deutschland fahren.
+  fetch('/de-boundary.geojson')
+    .then((r) => r.json())
+    .then((gj) => { boundary = boundaryRings(gj); if (active) fetchTrips(); })
+    .catch(() => { /* ohne Grenze: es wird nicht geofiltert */ });
 
   // Dezente Statuszeile unter der vorhandenen Streckeninfo-/Status-Zeile.
   const statusEl = document.createElement('div');
@@ -216,7 +262,7 @@ export function initLiveTrips({ map, L, renderer, overlayControl, defaultOn = fa
       const resp = await fetch(url);
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       const raw = await resp.json();
-      const list = normalizeTrips(raw, now.getTime());
+      const list = normalizeTrips(raw, now.getTime(), boundary);
       syncTrains(list);
       setStatus(`Live-Züge: ${list.length} im Ausschnitt · Stand ${now.toLocaleTimeString('de-DE')}`);
     } catch (e) {

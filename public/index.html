@@ -173,14 +173,15 @@
 
   <script src="/vendor/leaflet/leaflet.js"></script>
   <script>
-  const map = L.map('map', { preferCanvas: true }).setView([51.2, 10.4], 6);
+  // EIN Canvas-Renderer für ALLE Vektoren, als Map-Default gesetzt. Wichtig: sonst
+  // legt preferCanvas einen zweiten, leeren Default-Canvas ÜBER den Renderer-Canvas,
+  // der echte Klicks abfängt (Linien/Züge reagieren dann nicht). tolerance vergrößert
+  // zudem die Klick-Trefffläche (dünne Linien / kleine, bewegte Marker).
+  const renderer = L.canvas({ padding: 0.5, tolerance: 8 });
+  const map = L.map('map', { renderer }).setView([51.2, 10.4], 6);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19, attribution: '&copy; OpenStreetMap-Mitwirkende · Daten: DB InfraGO / ISR'
   }).addTo(map);
-
-  // tolerance vergrößert die Klick-Trefffläche (dünne Linien + kleine/bewegte Marker
-  // lassen sich sonst nur schwer exakt treffen -> "manchmal geht der Klick nicht").
-  const renderer = L.canvas({ padding: 0.5, tolerance: 8 });
 
   // ---- Farblogik ----
   const ELEKTR = {
@@ -750,7 +751,7 @@
   // Seitenleiste ist fest angedockt (kein Ein-/Ausklappen).
   </script>
   <script type="module">
-    import { initLiveTrips } from './live-trips.js?v=3';
+    import { initLiveTrips } from './live-trips.js?v=4';
     const ctx = window.__ISR_MAP__;
     if (ctx) initLiveTrips({ map: ctx.map, L: window.L, renderer: ctx.renderer, overlayControl: ctx.overlayControl, defaultOn: true });
   </script>
