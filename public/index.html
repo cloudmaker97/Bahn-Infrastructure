@@ -64,6 +64,9 @@
       background:var(--panel); color:var(--txt); border:1px solid var(--border);
     }
     .leaflet-control-layers-expanded { padding:8px 10px; }
+    /* Eingerückte Unter-Filter (z. B. "Nur Echtzeit" unter Live-Züge, Baustellen/Ruhen unter Störungen) */
+    .leaflet-control-layers label:has(.lc-sub) { padding-left:22px; }
+    .lc-sub { color:var(--muted); }
 
     .panel label { display:block; font-size:11px; color:var(--muted); margin:14px 0 4px;
       text-transform:uppercase; letter-spacing:.04em; font-weight:600; }
@@ -185,7 +188,10 @@
   const renderer = L.canvas({ padding: 0.5, tolerance: 8 });
   const map = L.map('map', { renderer }).setView([51.2, 10.4], 6);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '&copy; OpenStreetMap-Mitwirkende · Daten: DB InfraGO / ISR'
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap-Mitwirkende · Daten: '
+      + '<a href="https://geoviewer.deutschebahn.com/maps/#/context/ISR/275618" target="_blank" rel="noopener">DB InfraGO</a>'
+      + ' · Live-Züge: <a href="https://transitous.org/sources" target="_blank" rel="noopener">Transitous</a>'
   }).addTo(map);
 
   // ---- Farblogik ----
@@ -545,9 +551,10 @@
   // Ebenen-Einträge nur einmal anlegen (Zähler statisch aus dem ersten Load).
   function siAddOverlaysOnce(counts) {
     if (siOverlaysAdded) return;
-    overlayControl.addOverlay(siStoerungen, 'Störungen ('    + (counts.stoerungen    || 0) + ')');
-    overlayControl.addOverlay(siBaustellen, 'Baustellen ('   + (counts.baustellen    || 0) + ')');
-    overlayControl.addOverlay(siRuhen,      'Streckenruhen (' + (counts.streckenruhen || 0) + ')');
+    overlayControl.addOverlay(siStoerungen, 'Störungen (' + (counts.stoerungen || 0) + ')');
+    // Baustellen + Streckenruhen eingerückt unter "Störungen" (Unter-Filter).
+    overlayControl.addOverlay(siBaustellen, '<span class="lc-sub">Baustellen (' + (counts.baustellen || 0) + ')</span>');
+    overlayControl.addOverlay(siRuhen,      '<span class="lc-sub">Streckenruhen (' + (counts.streckenruhen || 0) + ')</span>');
     siOverlaysAdded = true;
   }
 
@@ -756,7 +763,7 @@
   // Seitenleiste ist fest angedockt (kein Ein-/Ausklappen).
   </script>
   <script type="module">
-    import { initLiveTrips } from './live-trips.js?v=5';
+    import { initLiveTrips } from './live-trips.js?v=6';
     const ctx = window.__ISR_MAP__;
     if (ctx) initLiveTrips({ map: ctx.map, L: window.L, renderer: ctx.renderer, overlayControl: ctx.overlayControl, defaultOn: true });
   </script>

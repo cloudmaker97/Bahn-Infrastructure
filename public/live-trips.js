@@ -204,9 +204,13 @@ export function initLiveTrips({ map, L, renderer, overlayControl, defaultOn = fa
 
   const group = L.layerGroup();
   overlayControl.addOverlay(group, 'Live-Züge');
+  // Eingerückter Unterfilter direkt unter "Live-Züge": nur Echtzeit-Züge anzeigen.
+  const echtzeitGroup = L.layerGroup();
+  overlayControl.addOverlay(echtzeitGroup, '<span class="lc-sub">Nur Echtzeit</span>');
 
   const trains = new Map(); // id -> { zug, marker }
   let active = false, rafId = null, refetchTimer = null, debounceTimer = null, inFlight = false, lastAnim = 0;
+  let realtimeOnly = false, lastList = [], lastStamp = '';
   let boundary = null; // äußere Ringe der DE-Landesgrenze (einmalig geladen)
   let deBbox = null;   // umschließende Bounding-Box der Grenze (zum Begrenzen der API-Anfrage)
 
@@ -248,6 +252,14 @@ export function initLiveTrips({ map, L, renderer, overlayControl, defaultOn = fa
   }
 
   function clearTrains() { group.clearLayers(); trains.clear(); }
+
+  // Rendert die zuletzt geladene Zugliste, ggf. auf Echtzeit-Züge gefiltert.
+  function renderList() {
+    const shown = realtimeOnly ? lastList.filter((z) => z.realTime) : lastList;
+    syncTrains(shown);
+    setStatus(`Live-Züge: ${shown.length} im Ausschnitt${realtimeOnly ? ' (nur Echtzeit)' : ''}`
+      + (lastStamp ? ` · Stand ${lastStamp}` : ''));
+  }
 
   function syncTrains(list) {
     const seen = new Set();
@@ -295,9 +307,9 @@ export function initLiveTrips({ map, L, renderer, overlayControl, defaultOn = fa
       const resp = await fetch(url);
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       const raw = await resp.json();
-      const list = normalizeTrips(raw, now.getTime(), boundary);
-      syncTrains(list);
-      setStatus(`Live-Züge: ${list.length} im Ausschnitt · Stand ${now.toLocaleTimeString('de-DE')}`);
+      lastList = normalizeTrips(raw, now.getTime(), boundary);
+      lastStamp = now.toLocaleTimeString('de-DE');
+      renderList();
     } catch (e) {
       setStatus('Live-Züge nicht verfügbar (' + ((e && e.message) || e) + ')');
     } finally {
@@ -344,11 +356,18 @@ export function initLiveTrips({ map, L, renderer, overlayControl, defaultOn = fa
     map.off('moveend zoomend', scheduleRefetch);
     if (rafId != null) { cancelAnimationFrame(rafId); rafId = null; }
     clearTrains();
+    lastList = [];
     setStatus('');
   }
 
-  map.on('overlayadd', (e) => { if (e.layer === group) start(); });
-  map.on('overlayremove', (e) => { if (e.layer === group) stop(); });
+  map.on('overlayadd', (e) => {
+    if (e.layer === group) start();
+    else if (e.layer === echtzeitGroup) { realtimeOnly = true; if (active) renderList(); }
+  });
+  map.on('overlayremove', (e) => {
+    if (e.layer === group) stop();
+    else if (e.layer === echtzeitGroup) { realtimeOnly = false; if (active) renderList(); }
+  });
 
   // Im Hintergrund-Tab kein Nachladen (spart Netz/CPU); beim Zurückkehren sofort aktualisieren.
   // (Die rAF-Animation drosselt der Browser im Hintergrund ohnehin automatisch.)
