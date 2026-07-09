@@ -22,6 +22,11 @@ export const STRECKENINFO_WS = 'wss://strecken-info.de/api/websocket';
 /** Cache-Dauer der Betriebslage-Daten (ms) – begrenzt Anfragen an strecken-info.de. */
 export const STRECKENINFO_TTL_MS = 3 * 60 * 1000;
 
+/** Transitous map/trips – Quelle der Live-Zugpositionen (Server ist federführend). */
+export const LIVETRIPS_API = 'https://api.transitous.org/api/v6/map/trips';
+/** Burst-Cache je Zoom-Bucket (Rate-Limit-Schutz gegenüber Transitous). */
+export const LIVETRIPS_TTL_MS = 10_000;
+
 /** Alle Layer, die gescraped und/oder in die Karte gebaut werden. */
 export interface LayerDef {
   key: string;

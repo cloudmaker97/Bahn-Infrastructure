@@ -1,0 +1,158 @@
+/* Dark-Mode. Ruhige, augenschonende dunkle Palette (portiert aus dem Alt-Frontend).
+   WICHTIG: Kein CSS-Invert-Filter auf der Karte – das CARTO-Basemap ist nativ dunkel. */
+:root {
+  --panel:#161b22; --txt:#e6edf3; --muted:#9aa7b4; --accent:#4a9eff;
+  --border:#2a323c; --field:#0f141a; --field-border:#39424d;
+  --ok:#2ea968; --ok-bg:#12271c; --danger:#e5534b;
+}
+* { box-sizing:border-box; }
+html,body { margin:0; height:100%; overflow:hidden;
+  font-family:system-ui,Segoe UI,Roboto,sans-serif; color:var(--txt); }
+
+/* Karte füllt immer den kompletten Viewport – auch bei kleinen/mobilen Viewports.
+   100dvh berücksichtigt dynamische Browser-Leisten; 100vh als Fallback. */
+#map {
+  position:fixed; inset:0;
+  width:100vw; height:100vh; height:100dvh;
+  background:#0b0f14;
+}
+
+/* Linke Seitenleiste: am Bildschirmrand angedockt (volle Höhe, bündig, ohne Header). */
+.panel {
+  position:fixed; z-index:1000; top:0; left:0; bottom:0; width:320px;
+  max-width:calc(100vw - 52px);
+  display:flex; flex-direction:column;
+  background:var(--panel); color:var(--txt);
+  border:none; border-right:1px solid var(--border);
+  box-shadow:2px 0 16px rgba(0,0,0,.45);
+  font-size:13px; overflow:hidden;
+}
+.panel-body { flex:1; overflow-y:auto; padding:14px; }
+
+.panel label { display:block; font-size:11px; color:var(--muted); margin:14px 0 4px;
+  text-transform:uppercase; letter-spacing:.04em; font-weight:600; }
+.panel select, .panel input {
+  width:100%; padding:8px 9px; border-radius:7px;
+  border:1px solid var(--field-border); background:var(--field); color:var(--txt); font-size:13px;
+}
+.panel select:focus, .panel input:focus { outline:none; border-color:var(--accent); background:var(--panel); }
+.btn { border:1px solid transparent; border-radius:7px; cursor:pointer; font-size:13px;
+  padding:8px 10px; font-weight:600; }
+.btn-primary { background:var(--accent); color:#fff; }
+.btn-ok { background:var(--ok); color:#fff; }
+.btn-ghost { background:var(--field); color:var(--muted); border-color:var(--field-border); font-weight:500; }
+.btn:hover { filter:brightness(1.05); }
+.row { display:flex; gap:8px; }
+.row > * { flex:1; }
+.note { font-size:11px; color:var(--muted); margin-top:10px; line-height:1.4; }
+.hint { font-size:11px; color:var(--muted); margin-top:10px; line-height:1.4; }
+
+/* Legende + Statuszeilen im linken Panel */
+.legend { margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }
+.legend .item { display:flex; align-items:center; gap:8px; margin:5px 0; font-size:12px; }
+.legend .swatch { width:22px; height:4px; border-radius:2px; flex:none; }
+.status { margin-top:12px; font-size:11px; color:var(--muted); }
+.status-line { font-size:11px; color:var(--muted); margin-top:6px; }
+.status .err, .err { color:var(--danger); }
+
+/* Fortschrittsbalken beim Laden der Kartendaten */
+.bar { height:6px; background:var(--field); border:1px solid var(--field-border);
+  border-radius:4px; overflow:hidden; margin-bottom:5px; }
+.bar-fill { height:100%; width:0; background:var(--accent); border-radius:4px; transition:width .12s linear; }
+.bar.indet .bar-fill { width:40%; animation:barIndet 1.1s infinite ease-in-out; }
+@keyframes barIndet { 0%{margin-left:-40%} 100%{margin-left:100%} }
+
+/* Routing-Ergebnis (Block folgt im nächsten Schritt; Stile schon portiert) */
+.routing { margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }
+.route-result { margin-top:10px; font-size:12px; }
+.route-result .summary { background:var(--ok-bg); border:1px solid #1f5a3d; border-radius:8px; padding:10px; margin-bottom:8px; }
+.route-result .summary b { color:var(--ok); font-size:15px; }
+.route-result .wp { max-height:150px; overflow:auto; border:1px solid var(--border); border-radius:8px; }
+.route-result .wp div { padding:3px 8px; border-bottom:1px solid var(--border); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.route-result .wp div:last-child { border-bottom:none; }
+.route-result .wp .rl { color:var(--accent); font-weight:600; }
+.route-result .err { color:var(--danger); }
+
+/* Ebenen-Steuerung (eigenes Control oben rechts, Panel-Optik) */
+.layerctl {
+  position:fixed; z-index:1000; top:10px; right:10px;
+  max-height:calc(100dvh - 24px); overflow-y:auto;
+  background:var(--panel); color:var(--txt); border:1px solid var(--border);
+  border-radius:10px; padding:8px 10px; font-size:13px;
+  box-shadow:0 2px 12px rgba(0,0,0,.45);
+}
+.layerctl label { display:flex; align-items:center; gap:6px; margin:3px 0; cursor:pointer; }
+/* Eingerückte Unter-Filter (z. B. „Nur Echtzeit" unter Live-Züge) */
+.layerctl label.lc-indent { padding-left:22px; }
+.lc-sub { color:var(--muted); }
+/* Trennlinie zwischen Eintrags-Gruppen (Live/Streckeninfo vs. ISR-Overlays) */
+.layerctl hr.lc-sep { border:none; border-top:1px solid var(--border); margin:6px 0; }
+
+/* Rechtsklick-Auswahl überlappender Elemente (Nearby-Liste) */
+.nearby { width:250px; max-width:100%; }
+.nearby b { display:block; margin:0 0 8px; font-size:12px; }
+.nearby-item { display:flex; align-items:flex-start; gap:8px; padding:6px 6px; cursor:pointer;
+  border-radius:6px; font-size:12px; border-bottom:1px solid var(--border); }
+.nearby-item:last-child { border-bottom:none; }
+.nearby-item:hover { background:var(--field); }
+.nearby-item .dot { width:9px; height:9px; border-radius:50%; flex:none; margin-top:3px; border:1px solid rgba(255,255,255,.5); }
+/* min-width:0 erlaubt das Schrumpfen des Flex-Kinds -> Text bricht um statt horizontal zu scrollen */
+.nearby-item .txt { min-width:0; flex:1; }
+.nearby-item .kind { display:block; color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.03em; }
+.nearby-item .label { display:block; overflow-wrap:anywhere; line-height:1.3; }
+
+/* Sammelmeldungen-Box unten im linken Panel (ein-/ausklappbar) */
+.sammel { margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }
+.sammel summary { cursor:pointer; font-size:11px; color:var(--muted);
+  text-transform:uppercase; letter-spacing:.04em; font-weight:600; }
+.sammel .list { max-height:220px; overflow:auto; margin-top:8px; }
+.sammel .item { padding:6px 0; border-bottom:1px solid var(--border); }
+.sammel .titel { font-weight:600; }
+.sammel .text { color:var(--muted); margin-top:2px; line-height:1.35; }
+.sammel .zeit { color:var(--muted); font-size:11px; margin-top:2px; }
+
+/* Software-Version unten rechts (über der Karten-Attribution) */
+.version {
+  position:fixed; z-index:1000; right:8px; bottom:22px;
+  font-size:10px; color:var(--muted); font-variant-numeric:tabular-nums;
+  background:rgba(22,27,34,.82); border:1px solid var(--border);
+  padding:2px 7px; border-radius:5px; pointer-events:none; user-select:none;
+}
+a { color:var(--accent); }
+code { background:var(--field); padding:1px 4px; border-radius:4px; font-size:11px; }
+
+/* ---- Dark-Mode-Overrides für MapLibre-Bedienelemente ---- */
+.maplibregl-map { background:#0b0f14; }
+.maplibregl-popup-content {
+  background:var(--panel); color:var(--txt); border:1px solid var(--border);
+  border-radius:8px; box-shadow:0 3px 16px rgba(0,0,0,.55);
+  font-size:12px; max-height:340px; overflow:auto; padding:10px 12px;
+}
+.maplibregl-popup-content h3 { margin:0 0 6px; font-size:14px; color:var(--txt); }
+.maplibregl-popup-content table { border-collapse:collapse; width:100%; }
+.maplibregl-popup-content td { padding:3px 6px; vertical-align:top; border-bottom:1px solid var(--border); }
+.maplibregl-popup-content td.k { color:var(--muted); white-space:nowrap; font-weight:600; }
+.maplibregl-popup-close-button { color:var(--muted); font-size:16px; }
+.maplibregl-popup-close-button:hover { color:var(--txt); background:transparent; }
+/* Popup-Pfeilspitze je Ankerrichtung einfärben (CSS-Dreieck über border-color) */
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip { border-top-color:var(--panel); }
+.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-right .maplibregl-popup-tip { border-bottom-color:var(--panel); }
+.maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color:var(--panel); }
+.maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color:var(--panel); }
+/* Bedien-Buttons (Zoom u. Ä.) dunkel */
+.maplibregl-ctrl-group { background:var(--panel); border:1px solid var(--border); }
+.maplibregl-ctrl-group button { background:var(--panel); }
+.maplibregl-ctrl-group button + button { border-top:1px solid var(--border); }
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter:invert(0.85); }
+/* Attribution unten rechts dunkel */
+.maplibregl-ctrl-attrib { background:rgba(22,27,34,.85) !important; color:var(--muted); }
+.maplibregl-ctrl-attrib a { color:var(--accent); }
+
+/* Responsive: auf schmalen Viewports schmaler andocken */
+@media (max-width:640px) {
+  .panel { width:min(320px, 86vw); }
+}

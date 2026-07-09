@@ -3,6 +3,7 @@
 import type { ServerResponse } from 'node:http';
 import type { RouteService } from '../routing/route-service.js';
 import type { StreckenInfoService } from '../data/streckeninfo.js';
+import type { LiveTripsService } from '../data/live-trips-service.js';
 import type { SseHub } from './sse-hub.js';
 import type { EntitySearch, RouteMode, StationSuggester } from '../types.js';
 
@@ -12,6 +13,7 @@ export class ApiRouter {
     private suggester: StationSuggester,
     private search: EntitySearch,
     private streckeninfo: StreckenInfoService,
+    private liveTrips: LiveTripsService,
     private sse: SseHub,
     private version: string,
   ) {}
@@ -39,6 +41,12 @@ export class ApiRouter {
       case '/api/streckeninfo/events':
         this.sse.addClient(res); // Response bleibt offen (kein json())
         return true;
+      case '/api/livetrips': {
+        // Asynchron: getTrains() wirft nie – Fehler stehen im error-Feld.
+        const zoom = Number(params.get('zoom') ?? '6');
+        void this.liveTrips.getTrains(zoom).then((r) => this.json(res, 200, r));
+        return true;
+      }
       case '/api/version':
         this.json(res, 200, { version: this.version });
         return true;
