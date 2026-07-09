@@ -11,6 +11,7 @@ import { ReloadableIsrData } from './data/reloadable-isr-data.js';
 import { StreckenInfoService } from './data/streckeninfo.js';
 import { LiveTripsService } from './data/live-trips-service.js';
 import { RouteService } from './routing/route-service.js';
+import { VerlaufResolver } from './routing/verlauf-resolver.js';
 import { ApiRouter } from './server/api-router.js';
 import { SseHub } from './server/sse-hub.js';
 import { StaticFileHandler } from './server/static-file-handler.js';
@@ -41,11 +42,14 @@ const data = new ReloadableIsrData();
 // Routing + HTTP verdrahten (ueber die stabilen, reload-faehigen Proxies)
 const routeService = new RouteService(data.pathfinder, data.stations);
 const sseHub = new SseHub();
+// Meldungen folgen dem realen Streckenverlauf statt der Luftlinie.
+const verlaufResolver = new VerlaufResolver(data.pathfinder, data.stations);
 const streckeninfo = new StreckenInfoService(data.stations, {
   apiBase: STRECKENINFO_API,
   wsUrl: STRECKENINFO_WS,
   ttlMs: STRECKENINFO_TTL_MS,
   onRefresh: () => sseHub.broadcast('streckeninfo'),
+  verlauf: verlaufResolver.resolve,
 });
 const liveTrips = new LiveTripsService();
 const apiRouter = new ApiRouter(routeService, data.stations, data.search, streckeninfo, liveTrips, sseHub, resolveVersion());
@@ -74,6 +78,7 @@ async function refreshData(): Promise<string> {
   await scrapeAll();
   buildMapData();
   data.reload();
+  verlaufResolver.leereCache(); // Graph/Geometrien koennten sich geaendert haben
   const s = data.stats;
   return `${s.objects.toLocaleString('de-DE')} Objekte · ${s.rl100.toLocaleString('de-DE')} RL100 · ${s.edges.toLocaleString('de-DE')} Kanten`;
 }

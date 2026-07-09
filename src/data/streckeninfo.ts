@@ -10,6 +10,7 @@ import type {
   StreckenInfoResult,
   SammelmeldungDTO,
   StoerungMeldungDTO,
+  VerlaufLookup,
 } from '../types.js';
 
 export type { StreckenInfoResult, SammelmeldungDTO, StoerungMeldungDTO } from '../types.js';
@@ -227,12 +228,18 @@ function verkehrsartenFlach(wirkungen: RawWirkung[] | undefined): string[] {
 /**
  * Ermittelt die Geometrie einer Stoerung mit Fallback-Kaskade:
  *  a) `koordinaten` (Mercator) -> LineString/Point wie gehabt;
- *  b) sonst `abschnitte` ueber RL100 aufloesen -> Segmente (MultiLineString/LineString),
- *     Abschnitte mit nur einem aufloesbaren Ende gehen als Punkt ein;
+ *  b) sonst `abschnitte` ueber RL100 aufloesen -> Segmente (MultiLineString/LineString)
+ *     entlang des realen Streckenverlaufs (resolveVerlauf, sonst Luftlinie);
+ *     Richtungs-Duplikate (A->B + B->A) werden nur einmal gezeichnet, Abschnitte
+ *     mit nur einem aufloesbaren Ende gehen als Punkt ein;
  *  c) sonst `betriebsstellen` ueber RL100 -> MultiPoint/Point;
  *  d) sonst null (nicht verortbar).
  */
-function stoerungGeometry(s: RawStoerung, resolveCoord: CoordResolver): GeoFeature['geometry'] {
+function stoerungGeometry(
+  s: RawStoerung,
+  resolveCoord: CoordResolver,
+  resolveVerlauf?: VerlaufLookup,
+): GeoFeature['geometry'] {
   // a) Direkte Mercator-Koordinaten.
   const koord = (s.koordinaten ?? []).map((p) => mercatorToWgs84(p.x, p.y));
   if (koord.length > 0) return linieOderPunkt(koord);
@@ -242,11 +249,21 @@ function stoerungGeometry(s: RawStoerung, resolveCoord: CoordResolver): GeoFeatu
   if (abschnitte.length > 0) {
     const segmente: [number, number][][] = [];
     const punkte: [number, number][] = [];
+    const gesehen = new Set<string>();
     for (const a of abschnitte) {
-      const von = a.von?.ril100 ? resolveCoord(a.von.ril100) : null;
-      const bis = a.bis?.ril100 ? resolveCoord(a.bis.ril100) : null;
-      if (von && bis) segmente.push([von, bis]);
-      else if (von) punkte.push(von);
+      const vonRil = a.von?.ril100;
+      const bisRil = a.bis?.ril100;
+      const von = vonRil ? resolveCoord(vonRil) : null;
+      const bis = bisRil ? resolveCoord(bisRil) : null;
+      if (von && bis) {
+        const key = [vonRil!.trim(), bisRil!.trim()].sort().join('>') + `@${a.streckennummer ?? ''}`;
+        if (gesehen.has(key)) continue;
+        gesehen.add(key);
+        const verlauf = resolveVerlauf
+          ? resolveVerlauf(vonRil!, bisRil!, a.streckennummer != null ? [a.streckennummer] : undefined)
+          : null;
+        segmente.push(verlauf ?? [von, bis]);
+      } else if (von) punkte.push(von);
       else if (bis) punkte.push(bis);
     }
     if (segmente.length > 0) {
@@ -278,10 +295,14 @@ function stoerungGeometry(s: RawStoerung, resolveCoord: CoordResolver): GeoFeatu
 }
 
 /** Rein: eine Stoerung -> GeoFeature (Geometrie via Fallback-Kaskade, ggf. geometry null). */
-export function toStoerungFeature(s: RawStoerung, resolveCoord: CoordResolver): GeoFeature {
+export function toStoerungFeature(
+  s: RawStoerung,
+  resolveCoord: CoordResolver,
+  resolveVerlauf?: VerlaufLookup,
+): GeoFeature {
   return {
     type: 'Feature',
-    geometry: stoerungGeometry(s, resolveCoord),
+    geometry: stoerungGeometry(s, resolveCoord, resolveVerlauf),
     properties: {
       kategorie: 'stoerung',
       key: s.key ?? '',
@@ -299,16 +320,24 @@ export function toStoerungFeature(s: RawStoerung, resolveCoord: CoordResolver): 
   };
 }
 
-/** Rein: eine Baustelle -> GeoFeature (LineString [von,bis] bzw. Point bei von==bis). */
-export function toBaustelleFeature(b: RawBaustelle): GeoFeature {
+/**
+ * Rein: eine Baustelle -> GeoFeature (Point bei von==bis; sonst realer
+ * Streckenverlauf via resolveVerlauf, Fallback Luftlinie [von,bis]).
+ */
+export function toBaustelleFeature(b: RawBaustelle, resolveVerlauf?: VerlaufLookup): GeoFeature {
   const von = b.koordinaten?.von;
   const bis = b.koordinaten?.bis;
   const coords: [number, number][] = [];
   if (von) coords.push(mercatorToWgs84(von.x, von.y));
   if (bis && !(von && von.x === bis.x && von.y === bis.y)) coords.push(mercatorToWgs84(bis.x, bis.y));
+  let geometry = linieOderPunkt(coords);
+  if (coords.length === 2 && resolveVerlauf && b.ril100Von && b.ril100Bis) {
+    const verlauf = resolveVerlauf(b.ril100Von, b.ril100Bis, b.streckennummern);
+    if (verlauf) geometry = { type: 'LineString', coordinates: verlauf };
+  }
   return {
     type: 'Feature',
-    geometry: linieOderPunkt(coords),
+    geometry,
     properties: {
       kategorie: 'baustelle',
       id: b.baustellenID ?? '',
@@ -387,6 +416,7 @@ export function baueGeoJson(
   rohdaten: StreckenInfoRohdaten,
   now: Date,
   resolveCoord: CoordResolver,
+  resolveVerlauf?: VerlaufLookup,
 ): Omit<StreckenInfoResult, 'generatedAt' | 'error'> {
   const rohStoerungen = Array.isArray(rohdaten.stoerungen) ? rohdaten.stoerungen : [];
   const rohBaustellen = Array.isArray(rohdaten.baustellen) ? rohdaten.baustellen : [];
@@ -397,7 +427,7 @@ export function baueGeoJson(
   const stoerungenAktiv = rohStoerungen.filter(
     (s) => s.sammelmeldung !== true && istAktuellAktiv(s, now),
   );
-  const stoerungenAlle = stoerungenAktiv.map((s) => toStoerungFeature(s, resolveCoord));
+  const stoerungenAlle = stoerungenAktiv.map((s) => toStoerungFeature(s, resolveCoord, resolveVerlauf));
   // Nur verortete Features in die Karte; Null-Geometrien separat zaehlen.
   const stoerungenFeat = stoerungenAlle.filter((f) => f.geometry !== null);
   const stoerungenOhneOrt = stoerungenAlle.length - stoerungenFeat.length;
@@ -408,7 +438,7 @@ export function baueGeoJson(
 
   const baustellenFeat = rohBaustellen
     .filter((b) => istAktuellAktiv(b, now))
-    .map(toBaustelleFeature);
+    .map((b) => toBaustelleFeature(b, resolveVerlauf));
 
   const streckenruhenFeat = rohStreckenruhen
     .filter((r) => istAktuellAktiv(r, now))
@@ -464,16 +494,22 @@ export class StreckenInfoService {
   private readonly wsUrl: string;
   private readonly ttlMs: number;
   private readonly onRefresh: (() => void) | null;
+  private readonly verlauf: VerlaufLookup | undefined;
   private cache: { data: StreckenInfoResult; ts: number } | null = null;
 
   constructor(
     private stations: StationLookup,
-    opts?: { apiBase?: string; wsUrl?: string; ttlMs?: number; onRefresh?: () => void },
+    opts?: {
+      apiBase?: string; wsUrl?: string; ttlMs?: number; onRefresh?: () => void;
+      /** Realer Streckenverlauf fuer Meldungen (statt Luftlinie); optional. */
+      verlauf?: VerlaufLookup;
+    },
   ) {
     this.apiBase = opts?.apiBase ?? 'https://strecken-info.de/api';
     this.wsUrl = opts?.wsUrl ?? 'wss://strecken-info.de/api/websocket';
     this.ttlMs = opts?.ttlMs ?? 180_000;
     this.onRefresh = opts?.onRefresh ?? null;
+    this.verlauf = opts?.verlauf;
   }
 
   /** Loest einen RL100 ueber die ISR-Betriebsstellen zu [lon, lat] auf. */
@@ -586,6 +622,7 @@ export class StreckenInfoService {
         { stoerungen, baustellen, streckenruhen, sammelmeldungen },
         now,
         this.resolveCoord,
+        this.verlauf,
       );
       const data: StreckenInfoResult = { ...gebaut, generatedAt: now.toISOString(), error: null };
       this.cache = { data, ts: nowMs };

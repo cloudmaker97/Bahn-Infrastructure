@@ -12,6 +12,7 @@ import {
   type CoordResolver,
 } from './streckeninfo.js';
 import { IsrData } from './isr-data.js';
+import { VerlaufResolver } from '../routing/verlauf-resolver.js';
 
 // --- 1) mercatorToWgs84 (Ulm, Toleranz 0.01 Grad) ---
 {
@@ -326,18 +327,134 @@ import { IsrData } from './isr-data.js';
   );
 }
 
+// --- Verlauf statt Luftlinie (resolveVerlauf): Stoerungs-Abschnitte + Baustellen ---
+{
+  const now = new Date(2026, 6, 6, 12, 0, 0); // Montag 12:00
+  const zeitraum = { beginn: '2026-07-01T00:00:00', ende: '2026-12-31T23:59:59' };
+  const fakeCoords = new Map<string, [number, number]>([
+    ['EEK', [8.0, 50.9]],
+    ['EBLB', [8.4, 51.0]],
+    ['XAA', [9.0, 49.0]],
+    ['XBB', [9.5, 49.2]],
+  ]);
+  const resolveCoord: CoordResolver = (ril100) => fakeCoords.get(ril100.trim()) ?? null;
+  // Fake-Verlauf: kennt nur EEK<->EBLB (3 Punkte); Richtung muss stimmen.
+  const verlaufAufrufe: Array<[string, string, number[] | undefined]> = [];
+  const resolveVerlauf = (von: string, bis: string, strecken?: number[]): [number, number][] | null => {
+    verlaufAufrufe.push([von, bis, strecken]);
+    if (von === 'EEK' && bis === 'EBLB') return [[8.0, 50.9], [8.2, 50.95], [8.4, 51.0]];
+    if (von === 'EBLB' && bis === 'EEK') return [[8.4, 51.0], [8.2, 50.95], [8.0, 50.9]];
+    return null;
+  };
+
+  // Stoerung mit Hin- UND Rueckrichtung (wie in echten Daten) -> EIN geroutetes Segment.
+  const stoerungHinRueck = {
+    key: 'BZI_DUP',
+    cause: 'Störung am Fahrweg', subcause: '', text: 'Hin+Rueck.',
+    zeitraum,
+    abschnitte: [
+      { von: { ril100: 'EEK' }, bis: { ril100: 'EBLB' }, streckennummer: 2871 },
+      { von: { ril100: 'EBLB' }, bis: { ril100: 'EEK' }, streckennummer: 2871 },
+    ],
+  };
+  // Stoerung, deren Verlauf NICHT aufloesbar ist -> Luftlinie (2 Punkte) bleibt.
+  const stoerungFallback = {
+    key: 'BZI_FALLBACK',
+    cause: 'Störung am Fahrweg', subcause: '', text: 'Fallback.',
+    zeitraum,
+    abschnitte: [{ von: { ril100: 'XAA' }, bis: { ril100: 'XBB' }, streckennummer: 1 }],
+  };
+  // Baustelle von!=bis mit beiden RIL100 -> gerouteter Verlauf.
+  const baustelleVerlauf = {
+    baustellenID: 'B_VERLAUF', arbeiten: 'Gleisbau', zeitraum,
+    streckennummern: [2871],
+    ril100Von: 'EEK', ril100Bis: 'EBLB',
+    koordinaten: {
+      von: { x: 890000, y: 6600000 },
+      bis: { x: 935000, y: 6620000 },
+    },
+  };
+  // Baustelle, deren Verlauf nicht aufloesbar ist -> Luftlinie (2 Punkte).
+  const baustelleFallback = {
+    baustellenID: 'B_FALLBACK', arbeiten: 'Gleisbau', zeitraum,
+    ril100Von: 'XAA', ril100Bis: 'XBB',
+    koordinaten: {
+      von: { x: 1000000, y: 6300000 },
+      bis: { x: 1060000, y: 6330000 },
+    },
+  };
+
+  const r = baueGeoJson(
+    {
+      stoerungen: [stoerungHinRueck, stoerungFallback],
+      baustellen: [baustelleVerlauf, baustelleFallback],
+      streckenruhen: [], sammelmeldungen: [],
+    },
+    now, resolveCoord, resolveVerlauf,
+  );
+
+  // Hin+Rueck dedupliziert -> EIN LineString mit der gerouteten 3-Punkte-Kette.
+  const dup = r.stoerungen.features.find((f) => f.properties.key === 'BZI_DUP')!;
+  assert.ok(dup, 'BZI_DUP verortet');
+  assert.strictEqual(dup.geometry!.type, 'LineString', 'Hin+Rueck -> EIN Segment (dedupliziert)');
+  assert.deepStrictEqual(dup.geometry!.coordinates, [[8.0, 50.9], [8.2, 50.95], [8.4, 51.0]]);
+  // Streckennummer wird an den Resolver durchgereicht.
+  assert.deepStrictEqual(verlaufAufrufe[0], ['EEK', 'EBLB', [2871]], 'streckennummer durchgereicht');
+
+  // Nicht aufloesbarer Verlauf -> Luftlinie wie bisher.
+  const fb = r.stoerungen.features.find((f) => f.properties.key === 'BZI_FALLBACK')!;
+  assert.strictEqual(fb.geometry!.type, 'LineString');
+  assert.deepStrictEqual(fb.geometry!.coordinates, [[9.0, 49.0], [9.5, 49.2]], 'Fallback = Luftlinie');
+
+  // Baustelle mit Verlauf -> geroutete Kette; ohne -> Luftlinie aus Mercator-Koordinaten.
+  const bv = r.baustellen.features.find((f) => f.properties.id === 'B_VERLAUF')!;
+  assert.strictEqual(bv.geometry!.type, 'LineString');
+  assert.strictEqual((bv.geometry!.coordinates as unknown[]).length, 3, 'Baustelle geroutet (3 Punkte)');
+  const bf = r.baustellen.features.find((f) => f.properties.id === 'B_FALLBACK')!;
+  assert.strictEqual(bf.geometry!.type, 'LineString');
+  assert.strictEqual((bf.geometry!.coordinates as unknown[]).length, 2, 'Baustelle Fallback = Luftlinie');
+
+  // Baustelle von==bis bleibt Punkt, auch mit Resolver.
+  const punktBaustelle = {
+    baustellenID: 'B_PUNKT', arbeiten: 'x', zeitraum,
+    ril100Von: 'EEK', ril100Bis: 'EBLB',
+    koordinaten: { von: { x: 890000, y: 6600000 }, bis: { x: 890000, y: 6600000 } },
+  };
+  const r2 = baueGeoJson(
+    { stoerungen: [], baustellen: [punktBaustelle], streckenruhen: [], sammelmeldungen: [] },
+    now, resolveCoord, resolveVerlauf,
+  );
+  assert.strictEqual(r2.baustellen.features[0]!.geometry!.type, 'Point', 'von==bis bleibt Punkt');
+}
+
 console.log('SELFTEST OK');
 
-// --- 4) LIVE-Smoke (Netz + echte ISR-Daten): counts + error loggen ---
+// --- 4) LIVE-Smoke (Netz + echte ISR-Daten): counts, Verlaufs-Routing + Dauer loggen ---
 {
   try {
-    // Echte Betriebsstellen laden, damit das RL100-Geocoding echt getestet wird.
+    // Echte Betriebsstellen + Graph laden: RL100-Geocoding UND Verlaufs-Routing echt testen.
     const data = new IsrData();
-    const r = await new StreckenInfoService(data.stations).getData();
+    const resolver = new VerlaufResolver(data.graph, data.stations);
+    const t0 = Date.now();
+    const r = await new StreckenInfoService(data.stations, { verlauf: resolver.resolve }).getData();
+    console.log(`LIVE Dauer inkl. Verlaufs-Routing: ${Date.now() - t0} ms`);
     console.log('LIVE counts:', JSON.stringify(r.counts));
     const verortet = r.counts.stoerungen;
     const gesamt = r.counts.stoerungen + r.counts.stoerungenOhneOrt;
     console.log(`LIVE Stoerungen verortet: ${verortet}/${gesamt}`);
+    // Wie viele Linien folgen dem Gleis (>2 Punkte) statt der Luftlinie (==2)?
+    const linienStat = (fc: { features: Array<{ geometry: { type: string; coordinates: unknown } | null }> }) => {
+      let geroutet = 0, luftlinie = 0;
+      for (const f of fc.features) {
+        const g = f.geometry;
+        const segs = g?.type === 'LineString' ? [g.coordinates as unknown[]]
+          : g?.type === 'MultiLineString' ? (g.coordinates as unknown[][]) : [];
+        for (const s of segs) (s.length > 2 ? geroutet++ : luftlinie++);
+      }
+      return `${geroutet} geroutet / ${luftlinie} Luftlinie`;
+    };
+    console.log(`LIVE Stoerungs-Linien: ${linienStat(r.stoerungen)}`);
+    console.log(`LIVE Baustellen-Linien: ${linienStat(r.baustellen)}`);
     if (r.error != null) console.warn('LIVE WARNUNG error:', r.error);
     else console.log('LIVE error: null');
   } catch (e) {

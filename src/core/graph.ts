@@ -22,7 +22,7 @@ export class Graph implements Pathfinder {
   get nodeCount(): number { return this.adj.size; }
   hasNode(n: number): boolean { return this.adj.has(n); }
 
-  dijkstra(start: number, goal: number, mode: RouteMode): PathResult | null {
+  dijkstra(start: number, goal: number, mode: RouteMode, edgeFilter?: (e: Edge) => boolean): PathResult | null {
     const key: keyof Edge = mode === 'short' ? 'distKm' : 'timeMin';
     const dist = new Map<number, number>();
     const prev = new Map<number, { from: number; edge: Edge }>();
@@ -40,6 +40,7 @@ export class Graph implements Pathfinder {
       if (!nbrs) continue;
       for (const e of nbrs) {
         if (done.has(e.to)) continue;
+        if (edgeFilter && !edgeFilter(e)) continue;
         const nd = cur.d + (e[key] as number);
         if (nd < (dist.get(e.to) ?? Infinity)) {
           dist.set(e.to, nd);

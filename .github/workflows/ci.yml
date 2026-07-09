@@ -37,6 +37,9 @@ jobs:
       - name: Selftest – Live-Züge (Service + Kernlogik)
         run: npx tsx src/data/live-trips.selftest.ts
 
+      - name: Selftest – Verlauf-Resolver
+        run: npx tsx src/routing/verlauf-resolver.selftest.ts
+
       - name: Abhängigkeiten installieren (Web)
         run: npm --prefix web ci
 

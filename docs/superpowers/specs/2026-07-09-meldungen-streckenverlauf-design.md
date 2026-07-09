@@ -33,7 +33,10 @@ Frontend bleibt unverändert (es zeichnet die gelieferte Geometrie).
 
 2. **`VerlaufResolver`** (`src/routing/verlauf-resolver.ts`, neu):
    `resolve(vonRil100, bisRil100, streckennummern?) → [lon,lat][] | null`
-   - RIL100 → stel über `StationLookup`.
+   - RIL100 → stel über `StationLookup`; Bahnhofsteil-Codes (Leerzeichen-Suffix,
+     z. B. „TU  P") fehlen in der ISR-Stationsliste und fallen auf die
+     Basis-Betriebsstelle („TU") zurück (leicht versetzter Endpunkt, aber realer
+     Verlauf – betraf in der Messung 181 von ~1130 Baustellen-Paaren).
    - Suchreihenfolge: (a) Dijkstra `short`, beschränkt auf die gemeldeten
      Streckennummern; (b) unbeschränkt, aber mit **Umweg-Guard**
      (Pfadlänge ≤ max(3 × Luftlinie, Luftlinie + 30 km)), damit bei
@@ -41,7 +44,9 @@ Frontend bleibt unverändert (es zeichnet die gelieferte Geometrie).
      (c) sonst `null` → Aufrufer behält die Luftlinie (heutiges Verhalten).
    - Kanten-`coords` ([lat,lon], Leaflet-Konvention) werden zu einer
      [lon,lat]-Kette (GeoJSON) verbunden, Stoßpunkte dedupliziert,
-     Koordinaten auf 5 Nachkommastellen gerundet (Payload).
+     Koordinaten auf 5 Nachkommastellen gerundet und per Douglas-Peucker
+     (15 m Toleranz) vereinfacht – `/api/streckeninfo` wird alle 3 min
+     gepollt, die Overlay-Linien brauchen keine Gleis-Präzision.
    - **Memo-Cache** je (von|bis|strecken); symmetrisch: (B,A) liefert die
      umgekehrte Kette von (A,B). `leereCache()` für den Daten-Reload.
 

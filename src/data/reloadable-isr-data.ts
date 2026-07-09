@@ -5,7 +5,7 @@
 // Verantwortung: Lebenszyklus/Austausch der Datenkomponenten (SRP); die Proxies wahren DIP.
 import { IsrData } from './isr-data.js';
 import type {
-  AbschnittLookup, AbschnittProps, EntitySearch, Pathfinder, PathResult,
+  AbschnittLookup, AbschnittProps, Edge, EntitySearch, Pathfinder, PathResult,
   RouteMode, SearchEntry, Station, StationLookup, StationSuggester,
 } from '../types.js';
 
@@ -39,8 +39,8 @@ export class ReloadableIsrData {
   // --- Delegierende Proxies (lesen jeweils die AKTUELLE IsrData, lazy) ---
 
   readonly pathfinder: Pathfinder = {
-    dijkstra: (start: number, goal: number, mode: RouteMode): PathResult | null =>
-      this.current.graph.dijkstra(start, goal, mode),
+    dijkstra: (start: number, goal: number, mode: RouteMode, edgeFilter?: (e: Edge) => boolean): PathResult | null =>
+      this.current.graph.dijkstra(start, goal, mode, edgeFilter),
   };
 
   readonly stations: StationLookup & StationSuggester = {

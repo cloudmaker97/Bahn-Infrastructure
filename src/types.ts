@@ -101,8 +101,19 @@ export interface StationLookup {
 
 /** Nur die fuer Routing noetige Sicht auf den Graphen. */
 export interface Pathfinder {
-  dijkstra(start: number, goal: number, mode: RouteMode): PathResult | null;
+  dijkstra(start: number, goal: number, mode: RouteMode, edgeFilter?: (e: Edge) => boolean): PathResult | null;
 }
+
+/**
+ * Loest den realen Streckenverlauf zwischen zwei Betriebsstellen (RIL100) zu
+ * einer [lon,lat]-Kette (GeoJSON-Reihenfolge) auf; null, wenn kein plausibler
+ * Verlauf bestimmbar ist (Aufrufer faellt dann auf die Luftlinie zurueck).
+ */
+export type VerlaufLookup = (
+  vonRil100: string,
+  bisRil100: string,
+  streckennummern?: number[],
+) => [number, number][] | null;
 
 /** Autocomplete-Vorschlaege. */
 export interface StationSuggester {
