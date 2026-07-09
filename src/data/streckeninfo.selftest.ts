@@ -445,6 +445,56 @@ import { VerlaufResolver } from '../routing/verlauf-resolver.js';
     now, resolveCoord, resolveVerlauf,
   );
   assert.strictEqual(r2.baustellen.features[0]!.geometry!.type, 'Point', 'von==bis bleibt Punkt');
+
+  // --- 2-Punkt-koordinaten (Luftlinie) mit routbaren abschnitten: Gleisverlauf hat Vorrang ---
+  {
+    // Direkte 2-Punkt-koordinaten SIND selbst eine Luftlinie. Liefern die abschnitte
+    // einen gleisgenauen Verlauf, muss dieser die Gerade schlagen (Kern des Fixes).
+    const stoerungKoordUndVerlauf = {
+      key: 'BZI_KOORD_VERLAUF',
+      cause: 'Störung am Fahrweg', subcause: '', text: 'koordinaten + routbare abschnitte.',
+      zeitraum,
+      koordinaten: [
+        { x: 890000, y: 6600000 },
+        { x: 935000, y: 6620000 },
+      ],
+      abschnitte: [{ von: { ril100: 'EEK' }, bis: { ril100: 'EBLB' }, streckennummer: 2871 }],
+    };
+    // 2-Punkt-koordinaten mit abschnitten, die NICHT routen -> koordinaten bleiben (kein Regress).
+    const stoerungKoordOhneVerlauf = {
+      key: 'BZI_KOORD_FALLBACK',
+      cause: 'Störung am Fahrweg', subcause: '', text: 'koordinaten + nicht routbare abschnitte.',
+      zeitraum,
+      koordinaten: [
+        { x: 1000000, y: 6300000 },
+        { x: 1060000, y: 6330000 },
+      ],
+      abschnitte: [{ von: { ril100: 'XAA' }, bis: { ril100: 'XBB' }, streckennummer: 1 }],
+    };
+    const rk = baueGeoJson(
+      {
+        stoerungen: [stoerungKoordUndVerlauf, stoerungKoordOhneVerlauf],
+        baustellen: [], streckenruhen: [], sammelmeldungen: [],
+      },
+      now, resolveCoord, resolveVerlauf,
+    );
+    const kv = rk.stoerungen.features.find((f) => f.properties.key === 'BZI_KOORD_VERLAUF')!;
+    assert.ok(kv, 'BZI_KOORD_VERLAUF verortet');
+    assert.strictEqual(kv.geometry!.type, 'LineString', 'gerouteter Verlauf gewinnt gegen 2-Punkt-koordinaten');
+    assert.deepStrictEqual(
+      kv.geometry!.coordinates,
+      [[8.0, 50.9], [8.2, 50.95], [8.4, 51.0]],
+      'Gleiskette statt 2-Punkt-Luftlinie',
+    );
+    // Nicht routbar -> die direkten koordinaten (Luftlinie) bleiben erhalten.
+    const kf = rk.stoerungen.features.find((f) => f.properties.key === 'BZI_KOORD_FALLBACK')!;
+    assert.strictEqual(kf.geometry!.type, 'LineString');
+    assert.strictEqual(
+      (kf.geometry!.coordinates as unknown[]).length,
+      2,
+      'ohne Verlauf: koordinaten-Luftlinie bleibt',
+    );
+  }
 }
 
 console.log('SELFTEST OK');

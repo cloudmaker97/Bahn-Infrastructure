@@ -226,12 +226,65 @@ function verkehrsartenFlach(wirkungen: RawWirkung[] | undefined): string[] {
 }
 
 /**
+ * Verortet die `abschnitte` einer Stoerung ueber RL100 zu Segmenten
+ * (MultiLineString/LineString) entlang des realen Streckenverlaufs (resolveVerlauf,
+ * sonst Luftlinie). Richtungs-Duplikate (A->B + B->A) werden nur einmal gezeichnet,
+ * Abschnitte mit nur einem aufloesbaren Ende gehen als Punkt ein.
+ * Gibt zusaetzlich `geroutet` zurueck: true, sobald mindestens ein Abschnitt eine
+ * gleisgenaue Kette (statt Luftlinie) geliefert hat – das entscheidet, ob dieser
+ * Verlauf eine direkte 2-Punkt-Luftlinie aus `koordinaten` schlagen darf.
+ * Null, wenn kein Abschnitt verortbar war.
+ */
+function abschnitteGeometry(
+  abschnitte: RawAbschnitt[],
+  resolveCoord: CoordResolver,
+  resolveVerlauf?: VerlaufLookup,
+): { geometry: GeoFeature['geometry']; geroutet: boolean } | null {
+  const segmente: [number, number][][] = [];
+  const punkte: [number, number][] = [];
+  const gesehen = new Set<string>();
+  let geroutet = false;
+  for (const a of abschnitte) {
+    const vonRil = a.von?.ril100;
+    const bisRil = a.bis?.ril100;
+    const von = vonRil ? resolveCoord(vonRil) : null;
+    const bis = bisRil ? resolveCoord(bisRil) : null;
+    if (vonRil && bisRil) {
+      const key = [vonRil.trim(), bisRil.trim()].sort().join('>') + `@${a.streckennummer ?? ''}`;
+      if (gesehen.has(key)) continue;
+      gesehen.add(key);
+      // Verlauf haengt nur an den RIL-Codes (der Resolver kennt den
+      // Bft-Fallback), NICHT an resolveCoord – sonst degradieren Abschnitte
+      // mit Bahnhofsteil-Enden zum Punkt, obwohl sie routbar waeren.
+      const verlauf = resolveVerlauf
+        ? resolveVerlauf(vonRil, bisRil, a.streckennummer != null ? [a.streckennummer] : undefined)
+        : null;
+      if (verlauf) { segmente.push(verlauf); geroutet = true; continue; }
+    }
+    if (von && bis) segmente.push([von, bis]);
+    else if (von) punkte.push(von);
+    else if (bis) punkte.push(bis);
+  }
+  if (segmente.length > 0) {
+    // Die Geometrie-Union kennt keinen gemischten Typ; einzelne Punkte werden
+    // daher als degenerierte Segmente [p,p] mit in den MultiLineString gefuehrt.
+    for (const p of punkte) segmente.push([p, p]);
+    const geometry: GeoFeature['geometry'] = segmente.length === 1
+      ? { type: 'LineString', coordinates: segmente[0]! }
+      : { type: 'MultiLineString', coordinates: segmente };
+    return { geometry, geroutet };
+  }
+  if (punkte.length === 1) return { geometry: { type: 'Point', coordinates: punkte[0]! }, geroutet: false };
+  if (punkte.length > 1) return { geometry: { type: 'MultiPoint', coordinates: punkte }, geroutet: false };
+  return null;
+}
+
+/**
  * Ermittelt die Geometrie einer Stoerung mit Fallback-Kaskade:
- *  a) `koordinaten` (Mercator) -> LineString/Point wie gehabt;
- *  b) sonst `abschnitte` ueber RL100 aufloesen -> Segmente (MultiLineString/LineString)
- *     entlang des realen Streckenverlaufs (resolveVerlauf, sonst Luftlinie);
- *     Richtungs-Duplikate (A->B + B->A) werden nur einmal gezeichnet, Abschnitte
- *     mit nur einem aufloesbaren Ende gehen als Punkt ein;
+ *  a) `koordinaten` (Mercator) -> LineString/Point. Eine 2-Punkt-`koordinaten`-Linie
+ *     ist aber selbst eine Luftlinie: liefern die `abschnitte` einen gleisgenauen
+ *     Verlauf, hat dieser Vorrang (strecken-info liefert oft nur die zwei Endpunkte);
+ *  b) sonst `abschnitte` ueber RL100 -> Streckenverlauf (s. abschnitteGeometry);
  *  c) sonst `betriebsstellen` ueber RL100 -> MultiPoint/Point;
  *  d) sonst null (nicht verortbar).
  */
@@ -240,47 +293,24 @@ function stoerungGeometry(
   resolveCoord: CoordResolver,
   resolveVerlauf?: VerlaufLookup,
 ): GeoFeature['geometry'] {
+  const abschnitte = s.abschnitte ?? [];
+
   // a) Direkte Mercator-Koordinaten.
   const koord = (s.koordinaten ?? []).map((p) => mercatorToWgs84(p.x, p.y));
-  if (koord.length > 0) return linieOderPunkt(koord);
+  if (koord.length > 0) {
+    // Genau zwei Punkte = gerade Luftlinie. Routen die abschnitte gleisgenau,
+    // gewinnt der reale Verlauf; sonst bleibt es bei den koordinaten (kein Regress).
+    if (koord.length === 2 && abschnitte.length > 0) {
+      const ausAbschnitten = abschnitteGeometry(abschnitte, resolveCoord, resolveVerlauf);
+      if (ausAbschnitten?.geroutet) return ausAbschnitten.geometry;
+    }
+    return linieOderPunkt(koord);
+  }
 
-  // b) Abschnitte ueber RL100.
-  const abschnitte = s.abschnitte ?? [];
+  // b) Abschnitte ueber RL100 (wie bisher: vorhandene abschnitte "gewinnen" –
+  //    sind sie nicht verortbar, bleibt es bei null statt Fall-through zu c).
   if (abschnitte.length > 0) {
-    const segmente: [number, number][][] = [];
-    const punkte: [number, number][] = [];
-    const gesehen = new Set<string>();
-    for (const a of abschnitte) {
-      const vonRil = a.von?.ril100;
-      const bisRil = a.bis?.ril100;
-      const von = vonRil ? resolveCoord(vonRil) : null;
-      const bis = bisRil ? resolveCoord(bisRil) : null;
-      if (vonRil && bisRil) {
-        const key = [vonRil.trim(), bisRil.trim()].sort().join('>') + `@${a.streckennummer ?? ''}`;
-        if (gesehen.has(key)) continue;
-        gesehen.add(key);
-        // Verlauf haengt nur an den RIL-Codes (der Resolver kennt den
-        // Bft-Fallback), NICHT an resolveCoord – sonst degradieren Abschnitte
-        // mit Bahnhofsteil-Enden zum Punkt, obwohl sie routbar waeren.
-        const verlauf = resolveVerlauf
-          ? resolveVerlauf(vonRil, bisRil, a.streckennummer != null ? [a.streckennummer] : undefined)
-          : null;
-        if (verlauf) { segmente.push(verlauf); continue; }
-      }
-      if (von && bis) segmente.push([von, bis]);
-      else if (von) punkte.push(von);
-      else if (bis) punkte.push(bis);
-    }
-    if (segmente.length > 0) {
-      // Die Geometrie-Union kennt keinen gemischten Typ; einzelne Punkte werden
-      // daher als degenerierte Segmente [p,p] mit in den MultiLineString gefuehrt.
-      for (const p of punkte) segmente.push([p, p]);
-      if (segmente.length === 1) return { type: 'LineString', coordinates: segmente[0]! };
-      return { type: 'MultiLineString', coordinates: segmente };
-    }
-    if (punkte.length === 1) return { type: 'Point', coordinates: punkte[0]! };
-    if (punkte.length > 1) return { type: 'MultiPoint', coordinates: punkte };
-    return null;
+    return abschnitteGeometry(abschnitte, resolveCoord, resolveVerlauf)?.geometry ?? null;
   }
 
   // c) Betriebsstellen ueber RL100.
