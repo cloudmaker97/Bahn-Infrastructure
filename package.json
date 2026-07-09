@@ -1,17 +1,19 @@
 {
   "name": "isr-streckennetz",
   "version": "1.0.1",
-  "description": "DB Infrastrukturregister (ISR): Datenexport, Leaflet-Karte, Routing und TUI-Recherche",
+  "description": "DB Infrastrukturregister (ISR): Datenexport, Next.js/MapLibre-Karte, Routing und TUI-Recherche",
   "type": "module",
   "scripts": {
     "start": "tsx src/main.ts",
     "dev": "tsx watch src/main.ts",
+    "dev:web": "npm --prefix web run dev",
     "scrape": "tsx src/scrape.ts",
     "build:data": "tsx src/build-map-data.ts",
-    "build": "tsc",
+    "build:web": "npm --prefix web run build",
+    "build": "tsc && npm run build:web",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["isr", "deutsche-bahn", "streckennetz", "routing", "leaflet"],
+  "keywords": ["isr", "deutsche-bahn", "streckennetz", "routing", "maplibre", "nextjs"],
   "license": "UNLICENSED",
   "devDependencies": {
     "@types/node": "^22.10.0",

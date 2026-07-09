@@ -6,7 +6,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export const ROOT = join(__dirname, '..');
 export const DATA_RAW = join(ROOT, 'data', 'raw');
 export const DATA_WEB = join(ROOT, 'data', 'web');
-export const PUBLIC_DIR = join(ROOT, 'public');
+/** Statisches Frontend: der Next.js-Export (web/out, erzeugt via `npm run build:web`). */
+export const WEB_OUT = join(ROOT, 'web', 'out');
 
 // Standardmaessig 0 -> das OS vergibt beim Start einen freien (zufaelligen) Port.
 // Mit der Umgebungsvariable PORT laesst sich ein fester Port erzwingen (z. B. Tests).

@@ -1,7 +1,12 @@
-# Nur das für Build (src, tsconfig, package*) und Runtime (public) Nötige in den Build-Kontext.
+# Nur das für den Build Nötige in den Kontext (src, web-Quellen, tsconfig, package*).
 node_modules
+web/node_modules
+web/.next
+web/out
+web/next-env.d.ts
 dist
 data
+public
 .git
 .github
 .claude

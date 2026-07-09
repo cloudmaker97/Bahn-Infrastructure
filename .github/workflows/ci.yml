@@ -17,10 +17,10 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - name: Abhängigkeiten installieren
+      - name: Abhängigkeiten installieren (Server)
         run: npm ci
 
-      - name: Typecheck
+      - name: Typecheck (Server)
         run: npm run typecheck
 
       # Selftests laufen ohne Netz/ISR-Daten: die reinen Offline-Asserts greifen,
@@ -34,5 +34,14 @@ jobs:
       - name: Selftest – TUI
         run: npx tsx src/tui/tui.selftest.ts
 
-      - name: Selftest – Live-Züge
-        run: npx tsx public/live-trips.selftest.mjs
+      - name: Selftest – Live-Züge (Service + Kernlogik)
+        run: npx tsx src/data/live-trips.selftest.ts
+
+      - name: Abhängigkeiten installieren (Web)
+        run: npm --prefix web ci
+
+      - name: Typecheck (Web)
+        run: npm --prefix web run typecheck
+
+      - name: Build (Web, statischer Export)
+        run: npm --prefix web run build
