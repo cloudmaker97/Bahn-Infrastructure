@@ -115,6 +115,14 @@
     .leaflet-popup-content td { padding:3px 6px; vertical-align:top; border-bottom:1px solid var(--border); }
     .leaflet-popup-content td.k { color:var(--muted); white-space:nowrap; font-weight:600; }
     .hint { font-size:11px; color:var(--muted); margin-top:10px; line-height:1.4; }
+    /* Rechtsklick-Auswahl überlappender Elemente */
+    .nearby b { display:block; margin:0 0 6px; font-size:12px; }
+    .nearby-item { display:flex; align-items:center; gap:7px; padding:5px 8px; margin:0 -4px; cursor:pointer;
+      border-radius:6px; font-size:12px; border-bottom:1px solid var(--border); }
+    .nearby-item:last-child { border-bottom:none; }
+    .nearby-item:hover { background:var(--field); }
+    .nearby-item .dot { width:9px; height:9px; border-radius:50%; flex:none; border:1px solid rgba(255,255,255,.5); }
+    .nearby-item .kind { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.03em; }
     a { color:var(--accent); }
     code { background:var(--field); padding:1px 4px; border-radius:4px; font-size:11px; }
     #routing { margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }
@@ -679,6 +687,69 @@
   document.getElementById('rTo').addEventListener('keydown', e => { if (e.key==='Enter') calcRoute(); });
 
   renderLegend(mode);
+
+  // ---- Rechtsklick: überlappende/nahe Elemente auflisten und auswählbar machen ----
+  // Da Züge auf den Strecken liegen, überdeckt beim Linksklick das oberste Objekt die
+  // darunterliegenden. Rechtsklick sammelt alle Objekte mit Info-Popup im Umkreis.
+  const NEARBY_R = 14; // Pixel-Radius um den Klickpunkt
+  function describeNearby(layer) {
+    const color = (layer.options && (layer.options.fillColor || layer.options.color)) || '#8894a0';
+    const p = layer.feature && layer.feature.properties;
+    if (p) {
+      if (p.ISR_STRE_NR != null) return { kind:'Strecke', label:`Strecke ${p.ISR_STRE_NR}${p.ISR_STRECKE_VON_BIS ? ' · ' + p.ISR_STRECKE_VON_BIS : ''}`, color };
+      if (p.STRECKE1) return { kind:'Übergangsstelle', label:(p.BST_STELLE_NAME || 'Übergang'), color };
+      if (p.BST_STELLE_NAME) return { kind:'Betriebsstelle', label:p.BST_STELLE_NAME, color };
+      if (p.ALG_TUNNELNAME) return { kind:'Tunnel', label:p.ALG_TUNNELNAME, color };
+      if (p.ALG_BRUECKENNAME) return { kind:'Brücke', label:p.ALG_BRUECKENNAME, color };
+      if (p.ALG_BAHNUEBERGANGNAME) return { kind:'Bahnübergang', label:p.ALG_BAHNUEBERGANGNAME, color };
+      if (p.kategorie === 'stoerung') return { kind:'Störung', label:(p.cause || 'Störung'), color };
+      if (p.kategorie === 'baustelle') return { kind:'Baustelle', label:(p.arbeiten || 'Baustelle'), color };
+      if (p.kategorie === 'streckenruhe') return { kind:'Streckenruhe', label:(p.bstLangname || 'Streckenruhe'), color };
+    }
+    const tt = layer.getTooltip && layer.getTooltip();
+    if (tt) { const c = tt.getContent(); return { kind:'Zug', label:(typeof c === 'string' ? c : 'Zug'), color }; }
+    return { kind:'Element', label:'Element', color };
+  }
+  map.on('contextmenu', (e) => {
+    if (e.originalEvent) e.originalEvent.preventDefault();
+    const clickLp = e.layerPoint;
+    const hits = [];
+    map.eachLayer((layer) => {
+      if (!layer || !layer.getPopup || !layer.getPopup()) return;   // nur Objekte mit Info-Popup
+      let d = Infinity;
+      if (layer instanceof L.CircleMarker || layer instanceof L.Marker) {
+        try { d = map.latLngToLayerPoint(layer.getLatLng()).distanceTo(clickLp); } catch (_) { return; }
+      } else if (layer instanceof L.Polyline) {
+        try {
+          if (layer.getBounds && !layer.getBounds().pad(0.02).contains(e.latlng)) return; // schnelle Vorauswahl
+          const cp = layer.closestLayerPoint(clickLp);
+          if (cp) d = cp.distance;
+        } catch (_) { return; }
+      } else return;
+      if (d <= NEARBY_R) hits.push({ layer, d });
+    });
+    if (!hits.length) return;
+    hits.sort((a, b) => a.d - b.d);
+    if (hits.length === 1) { hits[0].layer.openPopup(e.latlng); return; }
+    const rows = hits.map((h, i) => {
+      const info = describeNearby(h.layer);
+      return `<div class="nearby-item" data-i="${i}">` +
+        `<span class="dot" style="background:${info.color}"></span>` +
+        `<span><span class="kind">${siEsc(info.kind)}</span><br>${siEsc(info.label)}</span></div>`;
+    }).join('');
+    const popup = L.popup({ maxWidth: 320, className: 'nearby-popup', autoPan: true })
+      .setLatLng(e.latlng)
+      .setContent(`<div class="nearby"><b>${hits.length} Elemente in der Nähe</b>${rows}</div>`)
+      .openOn(map);
+    const node = popup.getElement();
+    if (node) node.querySelectorAll('.nearby-item').forEach((el) => {
+      el.addEventListener('click', () => {
+        const h = hits[Number(el.dataset.i)];
+        map.closePopup(popup);
+        h.layer.openPopup(e.latlng);
+      });
+    });
+  });
 
   // ---- Panel ein-/ausklappen ----
   const panel = document.getElementById('panel');
