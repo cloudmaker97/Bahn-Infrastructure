@@ -127,9 +127,9 @@ export function boundaryRings(geojson) {
  * Wandelt die Roh-Segmente von map/trips in normalisierte Zug-Objekte.
  * Verwirft Nicht-Eisenbahn, ungültige Zeiten und undekodierbare Polylinien.
  * @param {any[]} rawArray
- * @param {number} nowMs  (reserviert; aktuell ohne Wirkung auf das Ergebnis)
+ * @param {number} nowMs  aktueller Zeitpunkt (ms) – bestimmt die Zugposition für den Grenzfilter
  * @param {[number,number][][]|null} rings  optionale Landesgrenze (äußere Ringe);
- *        wenn gesetzt, werden nur Züge behalten, deren Fahrweg Deutschland berührt.
+ *        wenn gesetzt, werden nur Züge behalten, deren AKTUELLE Position in Deutschland liegt.
  * @returns {object[]}
  */
 export function normalizeTrips(rawArray, nowMs, rings = null) {
@@ -143,8 +143,15 @@ export function normalizeTrips(rawArray, nowMs, rings = null) {
     if (typeof seg.polyline !== 'string' || seg.polyline.length === 0) continue;
     const coords = decodePolyline(seg.polyline);
     if (coords.length < 2) continue;
-    // Nur Züge, deren Fahrweg innerhalb der deutschen Landesgrenze verläuft (coords = [lat,lon]).
-    if (rings && rings.length && !coords.some((c) => pointInBoundary(c[1], c[0], rings))) continue;
+    const track = buildTrack(coords);
+    // Nur Züge, deren AKTUELLE Position innerhalb der deutschen Landesgrenze liegt.
+    // (Zeitpunkt nowMs -> Anteil frac -> Position; track/coords sind [lat, lon].)
+    if (rings && rings.length) {
+      const span = arriveMs - departMs;
+      const frac = span > 0 ? (nowMs - departMs) / span : 0;
+      const pos = positionAt(track, frac);
+      if (!pos || !pointInBoundary(pos[1], pos[0], rings)) continue;
+    }
 
     const trip = (Array.isArray(seg.trips) && seg.trips[0]) ? seg.trips[0] : {};
     const schedDepartMs = Date.parse(seg.scheduledDeparture);
@@ -156,7 +163,7 @@ export function normalizeTrips(rawArray, nowMs, rings = null) {
       name: trip.displayName || '',
       mode: seg.mode,
       category: categoryOf(seg.mode),
-      track: buildTrack(coords),
+      track,
       departMs,
       arriveMs,
       schedDepartMs: Number.isFinite(schedDepartMs) ? schedDepartMs : departMs,
