@@ -21,6 +21,12 @@ function runde(x: number): number {
   return Math.round(x * 1e5) / 1e5;
 }
 
+/** Quadrat des planaren Abstands zweier [lon,lat]-Punkte (nur fuer Vergleiche). */
+function dist2(a: [number, number], b: [number, number]): number {
+  const dx = a[0] - b[0], dy = a[1] - b[1];
+  return dx * dx + dy * dy;
+}
+
 // Vereinfachungs-Toleranz: Meldungs-Overlays (4-6 px breite Linien) brauchen
 // keine Gleis-Praezision; 15 m sind auf allen Zoomstufen unsichtbar, druecken
 // den /api/streckeninfo-Payload aber erheblich (wird alle 3 min gepollt).
@@ -131,12 +137,34 @@ export class VerlaufResolver {
     return vereinfache(kette, VEREINFACHUNG_M);
   }
 
-  /** Kanten-Geometrien ([lat,lon]) zu einer [lon,lat]-Kette verbinden (Stoesse dedupliziert). */
+  /**
+   * Kanten-Geometrien ([lat,lon]) zu einer durchgehenden [lon,lat]-Kette verbinden.
+   * Die gespeicherte Kanten-Geometrie kann (nach dem Teilstueck-Stitching im
+   * GraphBuilder) in beliebiger GESAMTrichtung vorliegen; jede Kante wird daher so
+   * orientiert, dass ihr Anfang an das bisherige Ketten-Ende anschliesst – sonst
+   * springt die Linie zwischen den Kanten hin und her. Stoesse werden dedupliziert.
+   */
   private static kette(edges: Edge[]): [number, number][] {
     const out: [number, number][] = [];
-    for (const e of edges) {
-      for (const [lat, lon] of e.coords) {
-        const p: [number, number] = [runde(lon), runde(lat)];
+    for (let i = 0; i < edges.length; i++) {
+      const seg = edges[i]!.coords.map(([lat, lon]) => [runde(lon), runde(lat)] as [number, number]);
+      if (seg.length === 0) continue;
+      if (out.length === 0) {
+        // Erste Kante an der naechsten ausrichten, damit ihr Ende dort anschliesst.
+        const naechste = edges[i + 1]?.coords;
+        if (naechste && naechste.length > 0) {
+          const n0: [number, number] = [runde(naechste[0]![1]), runde(naechste[0]![0])];
+          const nEndeRoh = naechste[naechste.length - 1]!;
+          const nEnde: [number, number] = [runde(nEndeRoh[1]), runde(nEndeRoh[0])];
+          const endeNah = Math.min(dist2(seg[seg.length - 1]!, n0), dist2(seg[seg.length - 1]!, nEnde));
+          const anfangNah = Math.min(dist2(seg[0]!, n0), dist2(seg[0]!, nEnde));
+          if (anfangNah < endeNah) seg.reverse();
+        }
+      } else {
+        const ende = out[out.length - 1]!;
+        if (dist2(ende, seg[seg.length - 1]!) < dist2(ende, seg[0]!)) seg.reverse();
+      }
+      for (const p of seg) {
         const last = out[out.length - 1];
         if (last && last[0] === p[0] && last[1] === p[1]) continue;
         out.push(p);

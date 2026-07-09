@@ -25,6 +25,9 @@ jobs:
 
       # Selftests laufen ohne Netz/ISR-Daten: die reinen Offline-Asserts greifen,
       # die Live-Smoke-Blöcke loggen/überspringen sich sauber (kein harter Assert).
+      - name: Selftest – Geo-Helfer (Teilstueck-Verkettung)
+        run: npx tsx src/core/geo.selftest.ts
+
       - name: Selftest – streckeninfo
         run: npx tsx src/data/streckeninfo.selftest.ts
 

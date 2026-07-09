@@ -1,7 +1,7 @@
 // Baut aus der Web-GeoJSON der Streckenabschnitte den Routing-Graphen.
 // Verantwortung: Graphaufbau (SRP). Haengt von Abstraktionen (JsonStore) ab.
 import { Graph } from '../core/graph.js';
-import { parseGermanNumber, polylineLengthKm } from '../core/geo.js';
+import { parseGermanNumber, polylineLengthKm, verketteTeilstuecke } from '../core/geo.js';
 import { DEFAULT_SPEED } from '../config.js';
 import type { JsonStore } from './json-store.js';
 import type { AbschnittProps, FeatureCollection, LatLng } from '../types.js';
@@ -18,12 +18,16 @@ export class GraphBuilder {
       const a = p.ISR_STEL_ID_VON, b = p.ISR_STEL_ID_BIS;
       if (a == null || b == null) continue;
 
-      const coords: LatLng[] = [];
+      // Die Abschnittsgeometrie ist eine MultiLineString: ihre Teilstuecke liegen in
+      // beliebiger Reihenfolge/Orientierung vor und werden zu EINER lueckenlosen Kette
+      // verkettet – sonst entstehen grosse Sprunge (s. verketteTeilstuecke).
+      const teile: LatLng[][] = [];
       if (f.geometry && Array.isArray(f.geometry.coordinates)) {
         for (const line of f.geometry.coordinates as number[][][]) {
-          for (const [lon, lat] of line) coords.push([lat!, lon!]);
+          teile.push((line as number[][]).map(([lon, lat]) => [lat!, lon!] as LatLng));
         }
       }
+      const coords = verketteTeilstuecke(teile);
       let dist = parseGermanNumber(p.ALG_LAENGE_ABSCHNITT);
       if (!isFinite(dist) || dist <= 0) dist = coords.length > 1 ? polylineLengthKm(coords) : 0.1;
       let speed = parseGermanNumber(p.BET_GESCHWINDIGKEIT);
