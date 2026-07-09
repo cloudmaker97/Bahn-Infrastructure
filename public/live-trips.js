@@ -381,8 +381,12 @@ export function initLiveTrips({ map, L, renderer, overlayControl, defaultOn = fa
     }
   });
 
-  // Standardmäßig eingeschaltet: Gruppe zur Karte hinzufügen (Häkchen in der
-  // Ebenen-Steuerung) und den Loop direkt starten (programmatisches addTo feuert
-  // kein 'overlayadd', daher start() explizit).
-  if (defaultOn) { group.addTo(map); start(); }
+  // Standardmäßig eingeschaltet: Live-Züge + Unterfilter "Nur Echtzeit".
+  // Programmatisches addTo feuert kein 'overlayadd' -> realtimeOnly/start() explizit setzen.
+  if (defaultOn) {
+    realtimeOnly = true;       // Standard: nur Echtzeit-Züge
+    echtzeitGroup.addTo(map);  // Häkchen "Nur Echtzeit" in der Ebenen-Steuerung setzen
+    group.addTo(map);
+    start();
+  }
 }
