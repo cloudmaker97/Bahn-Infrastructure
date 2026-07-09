@@ -7,3 +7,8 @@ dist/
 
 .playwright-mcp/
 .claude-crash.cjs
+
+# Build-Artefakte/Tooling
+/.next/
+/next-env.d.ts
+.claude/
