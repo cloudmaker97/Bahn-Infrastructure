@@ -180,13 +180,16 @@ function nahe(ist: number, soll: number, tol: number, msg: string): void {
   assert.strictEqual(r2, r1, 'Cache liefert dasselbe Ergebnisobjekt');
 
   // Anderer Zoom-Bucket -> eigener Cache-Eintrag -> zweiter Upstream-Call.
-  await svc.getTrains(9);
+  await svc.getTrains(7);
   assert.strictEqual(urls.length, 2, 'anderer Bucket: 2. Upstream-Call');
 
-  // Zoom-Klemmung: 20 -> Bucket 14.
+  // Zoom-Klemmung: 20 -> Bucket 8 (Transitous: 422 bei DE-Bbox und zoom > 8).
   await svc.getTrains(20);
   assert.strictEqual(urls.length, 3, 'geklemmter Bucket: 3. Upstream-Call');
-  assert.strictEqual(new URL(urls[2]!).searchParams.get('zoom'), '14', 'zoom auf 14 geklemmt');
+  assert.strictEqual(new URL(urls[2]!).searchParams.get('zoom'), '8', 'zoom auf 8 geklemmt');
+  // 9 klemmt ebenfalls auf 8 -> Cache-Treffer, kein weiterer Upstream-Call.
+  await svc.getTrains(9);
+  assert.strictEqual(urls.length, 3, 'zoom 9 -> Bucket 8 aus dem Cache');
 
   // URL enthält die Deutschland-Bbox (min~47.2,5.8; max~55.1,15.1) + Bucket.
   const u = new URL(urls[0]!);
@@ -210,6 +213,37 @@ function nahe(ist: number, soll: number, tol: number, msg: string): void {
   const rf = await svcFehler.getTrains(6);
   assert.deepStrictEqual(rf.trains, [], 'Fehlerfall: keine Züge');
   assert.ok(rf.error && rf.error.includes('Netz weg'), `Fehlertext erwartet: ${rf.error}`);
+
+  // Negatives Caching: auch Fehler-Ergebnisse halten den Burst-Schutz aufrecht.
+  {
+    let calls = 0;
+    const immerKaputt = (async () => {
+      calls++;
+      throw new Error('Upstream down');
+    }) as unknown as typeof fetch;
+    const svcNeg = new LiveTripsService({ ttlMs: 60_000, fetchFn: immerKaputt });
+    const e1 = await svcNeg.getTrains(6);
+    const e2 = await svcNeg.getTrains(6);
+    assert.strictEqual(calls, 1, 'negatives Caching: nur 1 Upstream-Call trotz 2 Anfragen');
+    assert.ok(e1.error && e2.error, 'beide Antworten tragen den Fehler');
+  }
+
+  // Single-Flight: parallele Anfragen desselben Buckets teilen sich EINEN Upstream-Call.
+  {
+    let calls = 0;
+    const langsam = (async () => {
+      calls++;
+      await new Promise((f) => setTimeout(f, 25));
+      return new Response(JSON.stringify([segment]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+    const svcSf = new LiveTripsService({ fetchFn: langsam });
+    const [p1, p2] = await Promise.all([svcSf.getTrains(6), svcSf.getTrains(6)]);
+    assert.strictEqual(calls, 1, 'Single-Flight: 1 Upstream-Call für 2 parallele Anfragen');
+    assert.strictEqual(p1, p2, 'beide Aufrufer erhalten dasselbe Ergebnisobjekt');
+  }
 }
 
 console.log('live-trips selftest: OK');

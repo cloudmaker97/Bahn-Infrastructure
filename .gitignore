@@ -6,3 +6,4 @@ dist/
 .superpowers/
 
 .playwright-mcp/
+.claude-crash.cjs

@@ -250,8 +250,9 @@ export class TrainsLayer {
       this.onStatus(`Live-Züge nicht verfügbar (${this.fehler})`);
       return;
     }
+    // Der Server liefert immer alle Züge Deutschlands (DE-Bbox, gecacht) – nicht nur den Ausschnitt.
     this.onStatus(
-      `Live-Züge: ${shown} im Ausschnitt${this.realtimeOnly ? ' (nur Echtzeit)' : ''}` +
+      `Live-Züge: ${shown} in Deutschland${this.realtimeOnly ? ' (nur Echtzeit)' : ''}` +
       (this.stamp ? ` · Stand ${this.stamp}` : ''),
     );
   }
