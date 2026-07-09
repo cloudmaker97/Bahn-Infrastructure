@@ -255,15 +255,20 @@ function stoerungGeometry(
       const bisRil = a.bis?.ril100;
       const von = vonRil ? resolveCoord(vonRil) : null;
       const bis = bisRil ? resolveCoord(bisRil) : null;
-      if (von && bis) {
-        const key = [vonRil!.trim(), bisRil!.trim()].sort().join('>') + `@${a.streckennummer ?? ''}`;
+      if (vonRil && bisRil) {
+        const key = [vonRil.trim(), bisRil.trim()].sort().join('>') + `@${a.streckennummer ?? ''}`;
         if (gesehen.has(key)) continue;
         gesehen.add(key);
+        // Verlauf haengt nur an den RIL-Codes (der Resolver kennt den
+        // Bft-Fallback), NICHT an resolveCoord – sonst degradieren Abschnitte
+        // mit Bahnhofsteil-Enden zum Punkt, obwohl sie routbar waeren.
         const verlauf = resolveVerlauf
-          ? resolveVerlauf(vonRil!, bisRil!, a.streckennummer != null ? [a.streckennummer] : undefined)
+          ? resolveVerlauf(vonRil, bisRil, a.streckennummer != null ? [a.streckennummer] : undefined)
           : null;
-        segmente.push(verlauf ?? [von, bis]);
-      } else if (von) punkte.push(von);
+        if (verlauf) { segmente.push(verlauf); continue; }
+      }
+      if (von && bis) segmente.push([von, bis]);
+      else if (von) punkte.push(von);
       else if (bis) punkte.push(bis);
     }
     if (segmente.length > 0) {
@@ -510,6 +515,15 @@ export class StreckenInfoService {
     this.ttlMs = opts?.ttlMs ?? 180_000;
     this.onRefresh = opts?.onRefresh ?? null;
     this.verlauf = opts?.verlauf;
+  }
+
+  /**
+   * Ergebnis-Cache verwerfen (z. B. nach einem Daten-Reload: das gecachte
+   * GeoJSON wurde mit den alten Graph-Geometrien gebaut). Der naechste
+   * getData()-Aufruf scrapt und baut dann frisch.
+   */
+  invalidate(): void {
+    this.cache = null;
   }
 
   /** Loest einen RL100 ueber die ISR-Betriebsstellen zu [lon, lat] auf. */

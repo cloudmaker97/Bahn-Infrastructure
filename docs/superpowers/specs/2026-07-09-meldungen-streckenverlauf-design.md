@@ -52,10 +52,15 @@ Frontend bleibt unverändert (es zeichnet die gelieferte Geometrie).
 
 3. **`streckeninfo.ts`**:
    - `baueGeoJson(rohdaten, now, resolveCoord, resolveVerlauf?)` – der neue
-     Parameter ist optional; ohne ihn bleibt alles wie heute (reine Funktion,
-     offline testbar).
+     Parameter ist optional; ohne ihn bleibt die Luftlinie (reine Funktion,
+     offline testbar). Einzige Verhaltensänderung ohne Resolver: der
+     Richtungs-Dedupe (s. u.) greift auch dann – identische Doppelsegmente
+     (A→B + B→A) entfallen, was visuell nichts ändert.
    - `stoerungGeometry`: im `abschnitte`-Fallback je Abschnitt zuerst
-     `resolveVerlauf(von, bis, [streckennummer])`, sonst Luftlinie.
+     `resolveVerlauf(von, bis, [streckennummer])`, sonst Luftlinie. Der
+     Verlaufs-Versuch hängt nur an den RIL100-Codes (der Resolver kennt den
+     Bft-Fallback), nicht an `resolveCoord` – sonst degradierten Abschnitte
+     mit Bahnhofsteil-Enden zum Punkt, obwohl sie routbar sind.
      Richtungs-Duplikate (A→B + B→A, gleiche Strecke) werden dedupliziert.
    - `toBaustelleFeature`: bei `von ≠ bis` und beiden RIL100 zuerst
      `resolveVerlauf(ril100Von, ril100Bis, streckennummern)`, sonst Luftlinie.

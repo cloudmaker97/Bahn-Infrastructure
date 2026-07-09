@@ -11,6 +11,11 @@ import type { Edge, Pathfinder, StationLookup, VerlaufLookup } from '../types.js
 const UMWEG_FAKTOR = 3;
 const UMWEG_BONUS_KM = 30;
 
+// Groessendeckel fuer den Memo-Cache: im Headless-Betrieb gibt es keinen
+// Reload-Pfad, der ihn leert; realistisch sind wenige tausend Paare, der
+// Deckel ist nur das Sicherheitsnetz gegen unbegrenztes Wachstum.
+const CACHE_MAX = 5000;
+
 /** Auf ~1 m runden (5 Nachkommastellen) – haelt den GeoJSON-Payload klein. */
 function runde(x: number): number {
   return Math.round(x * 1e5) / 1e5;
@@ -79,6 +84,7 @@ export class VerlaufResolver {
     let kette = this.cache.get(key);
     if (kette === undefined) {
       kette = this.berechne(vorwaerts ? von : bis, vorwaerts ? bis : von, strecken);
+      if (this.cache.size >= CACHE_MAX) this.cache.clear();
       this.cache.set(key, kette);
     }
     if (kette === null) return null;

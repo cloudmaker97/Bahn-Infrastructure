@@ -79,6 +79,7 @@ async function refreshData(): Promise<string> {
   buildMapData();
   data.reload();
   verlaufResolver.leereCache(); // Graph/Geometrien koennten sich geaendert haben
+  streckeninfo.invalidate();    // gecachtes GeoJSON basiert noch auf dem alten Graphen
   const s = data.stats;
   return `${s.objects.toLocaleString('de-DE')} Objekte · ${s.rl100.toLocaleString('de-DE')} RL100 · ${s.edges.toLocaleString('de-DE')} Kanten`;
 }

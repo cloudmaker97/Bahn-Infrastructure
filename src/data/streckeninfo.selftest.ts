@@ -344,6 +344,9 @@ import { VerlaufResolver } from '../routing/verlauf-resolver.js';
     verlaufAufrufe.push([von, bis, strecken]);
     if (von === 'EEK' && bis === 'EBLB') return [[8.0, 50.9], [8.2, 50.95], [8.4, 51.0]];
     if (von === 'EBLB' && bis === 'EEK') return [[8.4, 51.0], [8.2, 50.95], [8.0, 50.9]];
+    // Bft-Code, den resolveCoord NICHT kennt (der echte Resolver loest ihn
+    // ueber die Basis-Betriebsstelle auf).
+    if (von === 'EEK Q' && bis === 'EBLB') return [[8.01, 50.91], [8.2, 50.95], [8.4, 51.0]];
     return null;
   };
 
@@ -400,6 +403,23 @@ import { VerlaufResolver } from '../routing/verlauf-resolver.js';
   assert.deepStrictEqual(dup.geometry!.coordinates, [[8.0, 50.9], [8.2, 50.95], [8.4, 51.0]]);
   // Streckennummer wird an den Resolver durchgereicht.
   assert.deepStrictEqual(verlaufAufrufe[0], ['EEK', 'EBLB', [2871]], 'streckennummer durchgereicht');
+
+  // Bft-Ende ("EEK Q"): resolveCoord kennt es nicht, der Verlaufs-Versuch muss
+  // trotzdem stattfinden (Gate sind die RIL-Codes, nicht resolveCoord).
+  const stoerungBft = {
+    key: 'BZI_BFT',
+    cause: 'Störung am Fahrweg', subcause: '', text: 'Bft-Ende.',
+    zeitraum,
+    abschnitte: [{ von: { ril100: 'EEK Q' }, bis: { ril100: 'EBLB' }, streckennummer: 2871 }],
+  };
+  const rBft = baueGeoJson(
+    { stoerungen: [stoerungBft], baustellen: [], streckenruhen: [], sammelmeldungen: [] },
+    now, resolveCoord, resolveVerlauf,
+  );
+  const bft = rBft.stoerungen.features.find((f) => f.properties.key === 'BZI_BFT')!;
+  assert.ok(bft, 'BZI_BFT verortet');
+  assert.strictEqual(bft.geometry!.type, 'LineString', 'Bft-Abschnitt wird geroutet statt Punkt');
+  assert.strictEqual((bft.geometry!.coordinates as unknown[]).length, 3);
 
   // Nicht aufloesbarer Verlauf -> Luftlinie wie bisher.
   const fb = r.stoerungen.features.find((f) => f.properties.key === 'BZI_FALLBACK')!;
