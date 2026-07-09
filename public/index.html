@@ -34,25 +34,7 @@
       box-shadow:2px 0 16px rgba(0,0,0,.45);
       font-size:13px; overflow:hidden;
     }
-    /* Eingeklappt: Höhe auf den Kopf schrumpfen (nicht die ganze Randhöhe belegen). */
-    .panel.collapsed { bottom:auto; }
-    /* Kopfzeile mit Ein-/Ausklapp-Schalter (v. a. auf Mobilgeraeten hilfreich) */
-    .panel-head {
-      display:flex; align-items:center; gap:8px; cursor:pointer;
-      padding:12px 14px; border-bottom:1px solid var(--border); user-select:none;
-    }
-    .panel-title { flex:1; min-width:0; }
-    .panel-head h1 { font-size:15px; margin:0; font-weight:650; }
-    .panel-head .sub { color:var(--muted); font-size:11px; font-weight:400; display:block; margin-top:2px; }
-    .panel-toggle {
-      flex:none; width:26px; height:26px; border:1px solid var(--border);
-      border-radius:6px; background:var(--field); color:var(--muted);
-      font-size:13px; line-height:1; cursor:pointer; transition:transform .15s;
-    }
-    .panel-body { flex:1; overflow-y:auto; padding:4px 14px 14px; }
-    .panel.collapsed .panel-body { display:none; }
-    .panel.collapsed .panel-toggle { transform:rotate(-90deg); }
-    .panel.collapsed .panel-head { border-bottom:none; }
+    .panel-body { flex:1; overflow-y:auto; padding:14px; }
 
     /* ---- Dark-Mode für Karte + Leaflet-Bedienelemente ---- */
     /* OSM-Tiles per CSS-Filter abdunkeln (Quelle bleibt OSM, kein neuer Anbieter).
@@ -123,6 +105,13 @@
     .nearby-item:hover { background:var(--field); }
     .nearby-item .dot { width:9px; height:9px; border-radius:50%; flex:none; border:1px solid rgba(255,255,255,.5); }
     .nearby-item .kind { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.03em; }
+    /* Software-Version unten rechts (über der Leaflet-Attribution) */
+    #version {
+      position:fixed; z-index:1000; right:8px; bottom:22px;
+      font-size:10px; color:var(--muted); font-variant-numeric:tabular-nums;
+      background:rgba(22,27,34,.82); border:1px solid var(--border);
+      padding:2px 7px; border-radius:5px; pointer-events:none; user-select:none;
+    }
     a { color:var(--accent); }
     code { background:var(--field); padding:1px 4px; border-radius:4px; font-size:11px; }
     #routing { margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }
@@ -143,14 +132,8 @@
 </head>
 <body>
   <div id="map"></div>
+  <div id="version" title="Software-Version"></div>
   <div class="panel" id="panel">
-    <div class="panel-head" id="panelHead">
-      <button class="panel-toggle" id="panelToggle" title="Ein-/ausklappen" aria-label="Ein-/ausklappen">▾</button>
-      <div class="panel-title">
-        <h1>ISR – Streckennetz</h1>
-        <span class="sub">Infrastrukturregister DB</span>
-      </div>
-    </div>
     <div class="panel-body" id="panelBody">
 
       <label>Einfärbung</label>
@@ -195,7 +178,9 @@
     maxZoom: 19, attribution: '&copy; OpenStreetMap-Mitwirkende · Daten: DB InfraGO / ISR'
   }).addTo(map);
 
-  const renderer = L.canvas({ padding: 0.5 });
+  // tolerance vergrößert die Klick-Trefffläche (dünne Linien + kleine/bewegte Marker
+  // lassen sich sonst nur schwer exakt treffen -> "manchmal geht der Klick nicht").
+  const renderer = L.canvas({ padding: 0.5, tolerance: 8 });
 
   // ---- Farblogik ----
   const ELEKTR = {
@@ -688,6 +673,11 @@
 
   renderLegend(mode);
 
+  // Software-Version unten rechts anzeigen.
+  fetch('/api/version').then(r => r.json()).then(d => {
+    if (d && d.version) document.getElementById('version').textContent = d.version;
+  }).catch(() => {});
+
   // ---- Rechtsklick: überlappende/nahe Elemente auflisten und auswählbar machen ----
   // Da Züge auf den Strecken liegen, überdeckt beim Linksklick das oberste Objekt die
   // darunterliegenden. Rechtsklick sammelt alle Objekte mit Info-Popup im Umkreis.
@@ -757,17 +747,7 @@
     });
   });
 
-  // ---- Panel ein-/ausklappen ----
-  const panel = document.getElementById('panel');
-  document.getElementById('panelHead').addEventListener('click', () => {
-    panel.classList.toggle('collapsed');
-    document.getElementById('panelToggle').textContent = panel.classList.contains('collapsed') ? '▸' : '▾';
-  });
-  // Auf schmalen Viewports (Handy) eingeklappt starten, damit die Karte frei bleibt
-  if (window.matchMedia('(max-width:640px)').matches) {
-    panel.classList.add('collapsed');
-    document.getElementById('panelToggle').textContent = '▸';
-  }
+  // Seitenleiste ist fest angedockt (kein Ein-/Ausklappen).
   </script>
   <script type="module">
     import { initLiveTrips } from './live-trips.js?v=3';

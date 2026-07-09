@@ -19,6 +19,8 @@ ENV PORT=8000 \
 # Kompilierten Server + statische Web-Dateien übernehmen.
 COPY --from=build /app/dist ./dist
 COPY public ./public
+# package.json für die Basis-Versionsanzeige (kein .git im Image -> ggf. APP_VERSION setzen).
+COPY package.json ./
 # Hinweis: data/ wird zur Laufzeit ins Volume /app/data geschrieben (siehe docker-compose.yml);
 # beim allerersten Start lädt die App die ISR-Daten selbst vom DB-WFS.
 EXPOSE 8000

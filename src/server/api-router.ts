@@ -13,6 +13,7 @@ export class ApiRouter {
     private search: EntitySearch,
     private streckeninfo: StreckenInfoService,
     private sse: SseHub,
+    private version: string,
   ) {}
 
   /** Versucht, den Pfad als API zu behandeln. true = erledigt. */
@@ -37,6 +38,9 @@ export class ApiRouter {
         return true;
       case '/api/streckeninfo/events':
         this.sse.addClient(res); // Response bleibt offen (kein json())
+        return true;
+      case '/api/version':
+        this.json(res, 200, { version: this.version });
         return true;
       default:
         return false;

@@ -4,6 +4,7 @@ import { PORT, PUBLIC_DIR, DATA_WEB, STRECKENINFO_API, STRECKENINFO_WS, STRECKEN
 import { ensureData } from './ensure-data.js';
 import { scrapeAll } from './scrape.js';
 import { buildMapData } from './build-map-data.js';
+import { resolveVersion } from './app-version.js';
 import { ReloadableIsrData } from './data/reloadable-isr-data.js';
 import { StreckenInfoService } from './data/streckeninfo.js';
 import { RouteService } from './routing/route-service.js';
@@ -43,7 +44,7 @@ const streckeninfo = new StreckenInfoService(data.stations, {
   ttlMs: STRECKENINFO_TTL_MS,
   onRefresh: () => sseHub.broadcast('streckeninfo'),
 });
-const apiRouter = new ApiRouter(routeService, data.stations, data.search, streckeninfo, sseHub);
+const apiRouter = new ApiRouter(routeService, data.stations, data.search, streckeninfo, sseHub, resolveVersion());
 const staticFiles = new StaticFileHandler(PUBLIC_DIR, DATA_WEB);
 const httpServer = new HttpServer(PORT, apiRouter, staticFiles);
 const boundPort = await httpServer.listen();     // PORT=0 -> vom OS vergebener freier Port
