@@ -57,14 +57,14 @@ export interface Pathfinder {
 }
 
 /**
- * Resolves the real course of the line between two operating points (RIL100)
- * into a [lon,lat] chain (GeoJSON order); null when no plausible course can be
- * determined (the caller then falls back to the straight line).
+ * Resolves the real track alignment between two operating points (RIL100)
+ * into a [lon,lat] chain (GeoJSON order); null when no plausible alignment can
+ * be determined (the caller then falls back to the straight line).
  */
-export type VerlaufLookup = (
-  vonRil100: string,
-  bisRil100: string,
-  streckennummern?: number[],
+export type AlignmentLookup = (
+  fromRil100: string,
+  toRil100: string,
+  lineNumbers?: number[],
 ) => [number, number][] | null;
 
 /** Autocomplete suggestions. */

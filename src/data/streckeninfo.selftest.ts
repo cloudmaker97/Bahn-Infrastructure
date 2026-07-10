@@ -12,7 +12,7 @@ import {
   type CoordResolver,
 } from './streckeninfo.js';
 import { IsrData } from './isr-data.js';
-import { VerlaufResolver } from '../routing/verlauf-resolver.js';
+import { AlignmentResolver } from '../routing/alignment-resolver.js';
 
 // --- 1) mercatorToWgs84 (Ulm, Toleranz 0.01 Grad) ---
 {
@@ -327,7 +327,7 @@ import { VerlaufResolver } from '../routing/verlauf-resolver.js';
   );
 }
 
-// --- Verlauf statt Luftlinie (resolveVerlauf): Stoerungs-Abschnitte + Baustellen ---
+// --- Verlauf statt Luftlinie (resolveAlignment): Stoerungs-Abschnitte + Baustellen ---
 {
   const now = new Date(2026, 6, 6, 12, 0, 0); // Montag 12:00
   const zeitraum = { beginn: '2026-07-01T00:00:00', ende: '2026-12-31T23:59:59' };
@@ -340,7 +340,7 @@ import { VerlaufResolver } from '../routing/verlauf-resolver.js';
   const resolveCoord: CoordResolver = (ril100) => fakeCoords.get(ril100.trim()) ?? null;
   // Fake-Verlauf: kennt nur EEK<->EBLB (3 Punkte); Richtung muss stimmen.
   const verlaufAufrufe: Array<[string, string, number[] | undefined]> = [];
-  const resolveVerlauf = (von: string, bis: string, strecken?: number[]): [number, number][] | null => {
+  const resolveAlignment = (von: string, bis: string, strecken?: number[]): [number, number][] | null => {
     verlaufAufrufe.push([von, bis, strecken]);
     if (von === 'EEK' && bis === 'EBLB') return [[8.0, 50.9], [8.2, 50.95], [8.4, 51.0]];
     if (von === 'EBLB' && bis === 'EEK') return [[8.4, 51.0], [8.2, 50.95], [8.0, 50.9]];
@@ -393,7 +393,7 @@ import { VerlaufResolver } from '../routing/verlauf-resolver.js';
       baustellen: [baustelleVerlauf, baustelleFallback],
       streckenruhen: [], sammelmeldungen: [],
     },
-    now, resolveCoord, resolveVerlauf,
+    now, resolveCoord, resolveAlignment,
   );
 
   // Hin+Rueck dedupliziert -> EIN LineString mit der gerouteten 3-Punkte-Kette.
@@ -414,7 +414,7 @@ import { VerlaufResolver } from '../routing/verlauf-resolver.js';
   };
   const rBft = baueGeoJson(
     { stoerungen: [stoerungBft], baustellen: [], streckenruhen: [], sammelmeldungen: [] },
-    now, resolveCoord, resolveVerlauf,
+    now, resolveCoord, resolveAlignment,
   );
   const bft = rBft.stoerungen.features.find((f) => f.properties.key === 'BZI_BFT')!;
   assert.ok(bft, 'BZI_BFT verortet');
@@ -442,7 +442,7 @@ import { VerlaufResolver } from '../routing/verlauf-resolver.js';
   };
   const r2 = baueGeoJson(
     { stoerungen: [], baustellen: [punktBaustelle], streckenruhen: [], sammelmeldungen: [] },
-    now, resolveCoord, resolveVerlauf,
+    now, resolveCoord, resolveAlignment,
   );
   assert.strictEqual(r2.baustellen.features[0]!.geometry!.type, 'Point', 'von==bis bleibt Punkt');
 
@@ -476,7 +476,7 @@ import { VerlaufResolver } from '../routing/verlauf-resolver.js';
         stoerungen: [stoerungKoordUndVerlauf, stoerungKoordOhneVerlauf],
         baustellen: [], streckenruhen: [], sammelmeldungen: [],
       },
-      now, resolveCoord, resolveVerlauf,
+      now, resolveCoord, resolveAlignment,
     );
     const kv = rk.stoerungen.features.find((f) => f.properties.key === 'BZI_KOORD_VERLAUF')!;
     assert.ok(kv, 'BZI_KOORD_VERLAUF verortet');
@@ -504,9 +504,9 @@ console.log('SELFTEST OK');
   try {
     // Echte Betriebsstellen + Graph laden: RL100-Geocoding UND Verlaufs-Routing echt testen.
     const data = new IsrData();
-    const resolver = new VerlaufResolver(data.graph, data.stations);
+    const resolver = new AlignmentResolver(data.graph, data.stations);
     const t0 = Date.now();
-    const r = await new StreckenInfoService(data.stations, { verlauf: resolver.resolve }).getData();
+    const r = await new StreckenInfoService(data.stations, { alignment: resolver.resolve }).getData();
     console.log(`LIVE Dauer inkl. Verlaufs-Routing: ${Date.now() - t0} ms`);
     console.log('LIVE counts:', JSON.stringify(r.counts));
     const verortet = r.counts.stoerungen;
