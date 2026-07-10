@@ -1,4 +1,4 @@
-# Nur das für den Build Nötige in den Kontext (src, web-Quellen, tsconfig, package*).
+# Only what the build needs goes into the context (src, web sources, tsconfig, package*).
 node_modules
 web/node_modules
 web/.next

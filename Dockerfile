@@ -1,32 +1,32 @@
 # syntax=docker/dockerfile:1
 
-# --- Build-Stage: Server (tsc -> dist/) + Web (Next.js -> web/out/). Der Server hat
-#     KEINE Runtime-Dependencies (nur Node-Builtins); Next wird nur zum Bauen gebraucht. ---
+# --- Build stage: server (tsc -> dist/) + web (Next.js -> web/out/). The server
+#     has NO runtime dependencies (Node builtins only); Next is build-time only. ---
 FROM node:22-slim AS build
 WORKDIR /app
-# Abhängigkeiten zuerst (Docker-Layer-Cache): Server + Web getrennt.
+# Dependencies first (Docker layer cache): server + web separately.
 COPY package.json package-lock.json tsconfig.json ./
 RUN npm ci
 COPY web/package.json web/package-lock.json ./web/
 RUN npm --prefix web ci
-# Quellen und bauen (web importiert src/shared -> beide Quellbäume nötig).
+# Sources and build (web imports src/shared -> both source trees are needed).
 COPY src ./src
 COPY web ./web
 RUN npm run build
 
-# --- Runtime-Stage: schlank, ohne node_modules ---
+# --- Runtime stage: slim, without node_modules ---
 FROM node:22-slim
 WORKDIR /app
-# Server ohne interaktive TUI; fester Port für den Reverse-Proxy.
+# Server without the interactive TUI; fixed port for the reverse proxy.
 ENV PORT=8000 \
     HEADLESS=1 \
     NODE_ENV=production
-# Kompilierter Server + statischer Next-Export.
+# Compiled server + static Next export.
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/web/out ./web/out
-# package.json für die Basis-Versionsanzeige (kein .git im Image -> ggf. APP_VERSION setzen).
+# package.json for the base version display (no .git in the image -> set APP_VERSION if needed).
 COPY package.json ./
-# Hinweis: data/ wird zur Laufzeit ins Volume /app/data geschrieben (siehe docker-compose.yml);
-# beim allerersten Start lädt die App die ISR-Daten selbst vom DB-WFS.
+# Note: data/ is written into the /app/data volume at runtime (see docker-compose.yml);
+# on the very first start the app loads the ISR data from the DB WFS itself.
 EXPOSE 8000
 CMD ["node", "dist/main.js"]
