@@ -61,35 +61,35 @@ import type { SectionLookup } from '../types.js';
   const loading = stripAnsi(rend.render(baseState({ status: 'loading', data: null }), ctx, 100, 24));
   assert.match(loading, /Lade Meldungen/, 'loading-Text');
 
-  // ready mit einer Stoerung + einer Sammelmeldung
+  // ready with one disruption + one aggregate notice
   const data = {
-    stoerungen: { type: 'FeatureCollection' as const, features: [], totalFeatures: 0 },
-    baustellen: { type: 'FeatureCollection' as const, features: [], totalFeatures: 0 },
-    streckenruhen: { type: 'FeatureCollection' as const, features: [], totalFeatures: 0 },
-    sammelmeldungen: [{ key: 's1', cause: 'Sammelursache', subcause: '', text: 'Sammeltext',
-      beginn: '', ende: '', verkehrsarten: ['FV'] }],
-    stoerungenListe: [{ key: 'x1', cause: 'Signalstoerung', subcause: 'Detail', text: 'Kaputtes Signal',
-      beginn: '2026-07-08T10:00:00', ende: '', verkehrsarten: ['NV'], gleisEinschraenkung: 'SCHWER',
-      verortet: false }],
+    disruptions: { type: 'FeatureCollection' as const, features: [], totalFeatures: 0 },
+    constructionSites: { type: 'FeatureCollection' as const, features: [], totalFeatures: 0 },
+    lineClosures: { type: 'FeatureCollection' as const, features: [], totalFeatures: 0 },
+    aggregateNotices: [{ key: 's1', cause: 'Sammelursache', subcause: '', text: 'Sammeltext',
+      start: '', end: '', transportModes: ['FV'] }],
+    disruptionNotices: [{ key: 'x1', cause: 'Signalstoerung', subcause: 'Detail', text: 'Kaputtes Signal',
+      start: '2026-07-08T10:00:00', end: '', transportModes: ['NV'], trackRestriction: 'SCHWER',
+      located: false }],
     generatedAt: '2026-07-08T10:00:00.000Z',
-    counts: { stoerungen: 0, stoerungenOhneOrt: 1, baustellen: 0, streckenruhen: 0, sammelmeldungen: 1 },
+    counts: { disruptions: 0, unlocatedDisruptions: 1, constructionSites: 0, lineClosures: 0, aggregateNotices: 1 },
     error: null,
   };
   const ready = stripAnsi(rend.render(baseState({ status: 'ready', data }), ctx, 100, 24));
-  assert.match(ready, /Störungen \(1\)/, 'Stoerungs-Ueberschrift mit Anzahl');
-  assert.match(ready, /Sammelmeldungen \(1\)/, 'Sammelmeldungs-Ueberschrift mit Anzahl');
-  assert.match(ready, /Signalstoerung/, 'Stoerungs-cause sichtbar');
-  assert.match(ready, /Kaputtes Signal/, 'Stoerungs-text sichtbar');
-  assert.match(ready, /ohne Ort/, 'Marker fuer nicht verortete Stoerung');
+  assert.match(ready, /Störungen \(1\)/, 'disruption heading with count');
+  assert.match(ready, /Sammelmeldungen \(1\)/, 'aggregate-notice heading with count');
+  assert.match(ready, /Signalstoerung/, 'disruption cause visible');
+  assert.match(ready, /Kaputtes Signal/, 'disruption text visible');
+  assert.match(ready, /ohne Ort/, 'marker for unlocated disruption');
 
-  // verortet:true darf KEINEN "ohne Ort"-Marker zeigen
-  const dataVerortet = {
+  // located:true must NOT show the "ohne Ort" marker
+  const dataLocated = {
     ...data,
-    stoerungenListe: [{ key: 'x2', cause: 'Weichenstoerung', subcause: '', text: 'Weiche defekt',
-      beginn: '', ende: '', verkehrsarten: ['FV'], gleisEinschraenkung: '', verortet: true }],
+    disruptionNotices: [{ key: 'x2', cause: 'Weichenstoerung', subcause: '', text: 'Weiche defekt',
+      start: '', end: '', transportModes: ['FV'], trackRestriction: '', located: true }],
   };
-  const readyVerortet = stripAnsi(rend.render(baseState({ status: 'ready', data: dataVerortet }), ctx, 100, 24));
-  assert.doesNotMatch(readyVerortet, /ohne Ort/, 'verortete Stoerung ohne "ohne Ort"-Marker');
+  const readyLocated = stripAnsi(rend.render(baseState({ status: 'ready', data: dataLocated }), ctx, 100, 24));
+  assert.doesNotMatch(readyLocated, /ohne Ort/, 'located disruption without "ohne Ort" marker');
 
   // refreshing-Status zeigt "Aktualisiere …"
   const refreshing = stripAnsi(rend.render(baseState({ status: 'refreshing', data }), ctx, 100, 24));
@@ -101,7 +101,7 @@ import type { SectionLookup } from '../types.js';
   assert.match(err, /Netzfehler/, 'Fehlertext sichtbar');
 
   // empty
-  const emptyData = { ...data, sammelmeldungen: [], stoerungenListe: [], error: null };
+  const emptyData = { ...data, aggregateNotices: [], disruptionNotices: [], error: null };
   const empty = stripAnsi(rend.render(baseState({ status: 'ready', data: emptyData }), ctx, 100, 24));
   assert.match(empty, /Keine aktuellen Meldungen/, 'Leer-Hinweis');
 

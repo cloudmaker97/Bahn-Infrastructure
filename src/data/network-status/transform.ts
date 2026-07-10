@@ -2,12 +2,13 @@
 // conversion, active filter, GeoJSON/DTO building. Separated from network/cache
 // (service.ts) so everything here is testable without network access.
 import type {
+  AggregateNoticeDTO,
   AlignmentLookup,
+  DisruptionNoticeDTO,
   FeatureCollection,
   GeoFeature,
-  SammelmeldungDTO,
-  StoerungMeldungDTO,
-  StreckenInfoResult,
+  NetworkStatusResult,
+  ValidityDTO,
 } from '../../types.js';
 import type {
   CoordResolver,
@@ -138,6 +139,17 @@ function flattenTransportModes(effects: RawEffect[] | undefined): string[] {
   return [...set];
 }
 
+/** Maps the raw validity windows to the English-keyed contract shape. */
+function toValidityDtos(validities: RawValidity[] | undefined): ValidityDTO[] {
+  return (validities ?? []).map((g) => ({
+    startDate: g.vonDatum,
+    endDate: g.bisDatum,
+    weekdays: g.wochentage,
+    startTime: g.vonUhrzeit,
+    endTime: g.bisUhrzeit,
+  }));
+}
+
 /**
  * Locates the `abschnitte` of a disruption via RL100 into segments
  * (MultiLineString/LineString) along the real track alignment (resolveAlignment,
@@ -254,17 +266,17 @@ export function toDisruptionFeature(
     type: 'Feature',
     geometry: disruptionGeometry(s, resolveCoord, resolveAlignment),
     properties: {
-      kategorie: 'stoerung',
+      category: 'disruption',
       key: s.key ?? '',
       cause: s.cause ?? '',
       subcause: s.subcause ?? '',
       text: s.text ?? '',
-      gleisEinschraenkung: s.gleisEinschraenkung ?? '',
-      beginn: s.zeitraum?.beginn ?? '',
-      ende: s.zeitraum?.ende ?? '',
-      wirkungen: (s.wirkungenMitVerkehrsarten ?? []).map((w) => ({
-        wirkung: w.wirkung ?? '',
-        verkehrsarten: w.verkehrsarten ?? [],
+      trackRestriction: s.gleisEinschraenkung ?? '',
+      start: s.zeitraum?.beginn ?? '',
+      end: s.zeitraum?.ende ?? '',
+      effects: (s.wirkungenMitVerkehrsarten ?? []).map((w) => ({
+        effect: w.wirkung ?? '',
+        transportModes: w.verkehrsarten ?? [],
       })),
     },
   };
@@ -289,20 +301,20 @@ export function toConstructionFeature(b: RawConstructionSite, resolveAlignment?:
     type: 'Feature',
     geometry,
     properties: {
-      kategorie: 'baustelle',
+      category: 'construction',
       id: b.baustellenID ?? '',
-      arbeiten: b.arbeiten ?? '',
-      wirkung: b.wirkung ?? '',
-      gleisEinschraenkung: b.gleisEinschraenkung ?? '',
-      streckennummern: b.streckennummern ?? [],
-      richtung: b.richtung ?? '',
-      langnameVon: b.langnameVon ?? '',
-      langnameBis: b.langnameBis ?? '',
-      ril100Von: b.ril100Von ?? '',
-      ril100Bis: b.ril100Bis ?? '',
-      beginn: b.zeitraum?.beginn ?? '',
-      ende: b.zeitraum?.ende ?? '',
-      gueltigkeiten: b.gueltigkeiten ?? [],
+      works: b.arbeiten ?? '',
+      effect: b.wirkung ?? '',
+      trackRestriction: b.gleisEinschraenkung ?? '',
+      lineNumbers: b.streckennummern ?? [],
+      direction: b.richtung ?? '',
+      longNameFrom: b.langnameVon ?? '',
+      longNameTo: b.langnameBis ?? '',
+      ril100From: b.ril100Von ?? '',
+      ril100To: b.ril100Bis ?? '',
+      start: b.zeitraum?.beginn ?? '',
+      end: b.zeitraum?.ende ?? '',
+      validities: toValidityDtos(b.gueltigkeiten),
     },
   };
 }
@@ -315,50 +327,44 @@ export function toClosureFeature(r: RawLineClosure): GeoFeature {
     type: 'Feature',
     geometry: lineOrPoint(coords),
     properties: {
-      kategorie: 'streckenruhe',
+      category: 'closure',
       id: r.streckenruhenId ?? '',
-      bstLangname: r.bstLangname ?? '',
+      stationLongName: r.bstLangname ?? '',
       ril100: r.ril100 ?? '',
-      streckennummer: r.streckennummer ?? null,
+      lineNumber: r.streckennummer ?? null,
       region: r.region ?? '',
-      arbeiten: r.arbeiten ?? '',
-      beginn: r.zeitraum?.beginn ?? '',
-      ende: r.zeitraum?.ende ?? '',
-      gueltigkeiten: r.gueltigkeiten ?? [],
+      works: r.arbeiten ?? '',
+      start: r.zeitraum?.beginn ?? '',
+      end: r.zeitraum?.ende ?? '',
+      validities: toValidityDtos(r.gueltigkeiten),
     },
   };
 }
 
 /** Pure: one disruption -> text DTO for lists/TUI (geometry-independent). */
-export function toDisruptionNoticeDto(s: RawDisruption, located: boolean): StoerungMeldungDTO {
+export function toDisruptionNoticeDto(s: RawDisruption, located: boolean): DisruptionNoticeDTO {
   return {
-    key: s.key ?? '',
-    cause: s.cause ?? '',
-    subcause: s.subcause ?? '',
-    text: s.text ?? '',
-    beginn: s.zeitraum?.beginn ?? '',
-    ende: s.zeitraum?.ende ?? '',
-    verkehrsarten: flattenTransportModes(s.wirkungenMitVerkehrsarten),
-    gleisEinschraenkung: s.gleisEinschraenkung ?? '',
-    verortet: located,
+    ...toAggregateNoticeDto(s),
+    trackRestriction: s.gleisEinschraenkung ?? '',
+    located,
   };
 }
 
 /** Pure: one aggregate notice -> DTO for the panel list. */
-export function toAggregateNoticeDto(s: RawDisruption): SammelmeldungDTO {
+export function toAggregateNoticeDto(s: RawDisruption): AggregateNoticeDTO {
   return {
     key: s.key ?? '',
     cause: s.cause ?? '',
     subcause: s.subcause ?? '',
     text: s.text ?? '',
-    beginn: s.zeitraum?.beginn ?? '',
-    ende: s.zeitraum?.ende ?? '',
-    verkehrsarten: flattenTransportModes(s.wirkungenMitVerkehrsarten),
+    start: s.zeitraum?.beginn ?? '',
+    end: s.zeitraum?.ende ?? '',
+    transportModes: flattenTransportModes(s.wirkungenMitVerkehrsarten),
   };
 }
 
 /**
- * Central, purely testable function: builds the StreckenInfoResult (without
+ * Central, purely testable function: builds the NetworkStatusResult (without
  * generatedAt/error) from the four raw arrays. Filters for "currently active"
  * and (for disruptions) for located non-aggregate notices.
  */
@@ -367,7 +373,7 @@ export function buildGeoJson(
   now: Date,
   resolveCoord: CoordResolver,
   resolveAlignment?: AlignmentLookup,
-): Omit<StreckenInfoResult, 'generatedAt' | 'error'> {
+): Omit<NetworkStatusResult, 'generatedAt' | 'error'> {
   const rawDisruptions = Array.isArray(raw.stoerungen) ? raw.stoerungen : [];
   const rawConstructionSites = Array.isArray(raw.baustellen) ? raw.baustellen : [];
   const rawClosures = Array.isArray(raw.streckenruhen) ? raw.streckenruhen : [];
@@ -397,17 +403,17 @@ export function buildGeoJson(
   const aggregateNotices = rawAggregates.map(toAggregateNoticeDto);
 
   return {
-    stoerungen: featureCollection(locatedDisruptions),
-    baustellen: featureCollection(constructionFeatures),
-    streckenruhen: featureCollection(closureFeatures),
-    sammelmeldungen: aggregateNotices,
-    stoerungenListe: disruptionNotices,
+    disruptions: featureCollection(locatedDisruptions),
+    constructionSites: featureCollection(constructionFeatures),
+    lineClosures: featureCollection(closureFeatures),
+    aggregateNotices,
+    disruptionNotices,
     counts: {
-      stoerungen: locatedDisruptions.length,
-      stoerungenOhneOrt: unlocatedCount,
-      baustellen: constructionFeatures.length,
-      streckenruhen: closureFeatures.length,
-      sammelmeldungen: aggregateNotices.length,
+      disruptions: locatedDisruptions.length,
+      unlocatedDisruptions: unlocatedCount,
+      constructionSites: constructionFeatures.length,
+      lineClosures: closureFeatures.length,
+      aggregateNotices: aggregateNotices.length,
     },
   };
 }

@@ -1,7 +1,7 @@
-// Selbsttest fuer die strecken-info-Aufbereitung.
-// 1) OFFLINE: reine Funktionen (Koordinaten, Aktiv-Filter, GeoJSON-Bau) mit Fixtures.
-// 2) LIVE-Smoke: echter Abruf (nur Logging, kein harter Assert).
-// Laufbar mit: npx tsx src/data/network-status/network-status.selftest.ts
+// Selftest for the network-status processing (strecken-info.de).
+// 1) OFFLINE: pure functions (coordinates, active filter, GeoJSON build) with fixtures.
+// 2) LIVE smoke: real fetch (logging only, no hard asserts).
+// Run with: npx tsx src/data/network-status/network-status.selftest.ts
 import assert from 'node:assert';
 import { mercatorToWgs84, isCurrentlyActive, buildGeoJson } from './transform.js';
 import { NetworkStatusService } from './service.js';
@@ -9,22 +9,22 @@ import type { CoordResolver, RawNetworkStatus } from './wire.js';
 import { IsrData } from '../isr-data.js';
 import { AlignmentResolver } from '../../routing/alignment-resolver.js';
 
-// --- 1) mercatorToWgs84 (Ulm, Toleranz 0.01 Grad) ---
+// --- 1) mercatorToWgs84 (Ulm, tolerance 0.01 degrees) ---
 {
   const [lon, lat] = mercatorToWgs84(1109620.2121808457, 6174406.904287126);
   assert.ok(Math.abs(lon - 9.968) < 0.01, `Ulm lon: ${lon}`);
-  // Hinweis: Die Standard-Mercator-Umkehrung liefert lat≈48.40 (echte Lage von Ulm ~48.399).
-  // Der im Auftrag genannte Wert 48.32 ist ein Tippfehler; 48.40 ist mathematisch korrekt.
+  // Note: the standard mercator inversion yields lat≈48.40 (Ulm really is at ~48.399).
+  // The value 48.32 mentioned in the original task was a typo; 48.40 is mathematically correct.
   assert.ok(Math.abs(lat - 48.40) < 0.01, `Ulm lat: ${lat}`);
-  // GeoJSON-Reihenfolge ist [lon, lat].
-  assert.ok(lon < lat, 'Reihenfolge muss [lon, lat] sein');
+  // GeoJSON order is [lon, lat].
+  assert.ok(lon < lat, 'order must be [lon, lat]');
 }
 
 // --- 2) isCurrentlyActive ---
 {
-  // Fenster, das JETZT abdeckt (normales Fenster innerhalb eines Tages).
-  const now = new Date(2026, 6, 6, 15, 0, 0); // Montag 15:00
-  const abdeckend = {
+  // Window that covers NOW (normal window within one day).
+  const now = new Date(2026, 6, 6, 15, 0, 0); // Monday 15:00
+  const covering = {
     gueltigkeiten: [
       {
         vonDatum: '2026-01-01',
@@ -35,10 +35,10 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
       },
     ],
   };
-  assert.strictEqual(isCurrentlyActive(abdeckend, now), true, 'abdeckendes Fenster -> true');
+  assert.strictEqual(isCurrentlyActive(covering, now), true, 'covering window -> true');
 
-  // Fenster ueber Mitternacht (20:00-04:00).
-  const ueberMitternacht = {
+  // Window across midnight (20:00-04:00).
+  const acrossMidnight = {
     gueltigkeiten: [
       {
         vonDatum: '2026-01-01',
@@ -50,37 +50,37 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
     ],
   };
   assert.strictEqual(
-    isCurrentlyActive(ueberMitternacht, new Date(2026, 6, 6, 23, 0, 0)),
+    isCurrentlyActive(acrossMidnight, new Date(2026, 6, 6, 23, 0, 0)),
     true,
-    'ueber Mitternacht um 23:00 -> true',
+    'across midnight at 23:00 -> true',
   );
   assert.strictEqual(
-    isCurrentlyActive(ueberMitternacht, new Date(2026, 6, 6, 12, 0, 0)),
+    isCurrentlyActive(acrossMidnight, new Date(2026, 6, 6, 12, 0, 0)),
     false,
-    'ueber Mitternacht um 12:00 -> false',
+    'across midnight at 12:00 -> false',
   );
 
-  // Stoerung: abgelaufen=true -> false.
-  const abgelaufen = {
+  // Disruption: abgelaufen=true -> false.
+  const expired = {
     zeitraum: { beginn: '2023-08-01T00:00:11', ende: '2026-12-12T23:59:59' },
     abgelaufen: true,
     geschlossen: false,
   };
-  assert.strictEqual(isCurrentlyActive(abgelaufen, now), false, 'abgelaufen -> false');
+  assert.strictEqual(isCurrentlyActive(expired, now), false, 'expired -> false');
 
-  // Stoerung: now im Zeitraum -> true.
-  const laufend = {
+  // Disruption: now within the period -> true.
+  const running = {
     zeitraum: { beginn: '2023-08-01T00:00:11', ende: '2026-12-12T23:59:59' },
     abgelaufen: false,
     geschlossen: false,
   };
-  assert.strictEqual(isCurrentlyActive(laufend, now), true, 'now im Zeitraum -> true');
+  assert.strictEqual(isCurrentlyActive(running, now), true, 'now within the period -> true');
 }
 
-// --- 3) buildGeoJson mit echten (getrimmten) Response-Fixtures ---
+// --- 3) buildGeoJson with real (trimmed) response fixtures ---
 {
-  // Stoerung (verortet, koordinaten = Linie aus 2 Punkten).
-  const stoerung = {
+  // Disruption (located, koordinaten = line of 2 points).
+  const disruption = {
     key: 'BZI_00055',
     cause: 'Störung am Fahrweg',
     subcause: 'Hindernis im/am Gleis',
@@ -100,8 +100,8 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
     abgelaufen: false,
   };
 
-  // Sammelmeldung (sammelmeldung=true, koordinaten leer) -> darf NICHT in stoerungen landen.
-  const sammel = {
+  // Aggregate notice (sammelmeldung=true, empty koordinaten) -> must NOT end up in disruptions.
+  const aggregate = {
     key: 'BZI_28777',
     cause: 'Sonstige Unregelmäßigkeit',
     subcause: '',
@@ -115,8 +115,8 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
     abgelaufen: false,
   };
 
-  // Baustelle (koordinaten = Segment von/bis, hier von==bis -> Point erwartet).
-  const baustelle = {
+  // Construction site (koordinaten = from/to segment, here from==to -> Point expected).
+  const constructionSite = {
     streckennummern: [4541],
     richtung: 'GEGEN_KILOMETRIERUNG',
     regionen: ['SUEDWEST'],
@@ -144,8 +144,8 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
     },
   };
 
-  // Stoerung OHNE koordinaten, verortet ueber `abschnitte` (RL100 -> Fake-Resolver).
-  const stoerungAbschnitt = {
+  // Disruption WITHOUT koordinaten, located via `abschnitte` (RL100 -> fake resolver).
+  const disruptionViaSection = {
     key: 'BZI_ABS',
     cause: 'Störung am Fahrweg',
     subcause: '',
@@ -167,8 +167,8 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
     abgelaufen: false,
   };
 
-  // Stoerung OHNE jegliche verortbare Geometrie -> geometry null, zaehlt als "ohne Ort".
-  const stoerungOhneOrt = {
+  // Disruption WITHOUT any locatable geometry -> geometry null, counted as unlocated.
+  const disruptionUnlocated = {
     key: 'BZI_NIX',
     cause: 'Sonstige Unregelmäßigkeit',
     subcause: '',
@@ -184,8 +184,8 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
     abgelaufen: false,
   };
 
-  // Streckenruhe (koordinaten = Punkt; Mo-Do, 20:00-04:00).
-  const streckenruhe = {
+  // Line closure (koordinaten = point; Mon-Thu, 20:00-04:00).
+  const lineClosure = {
     streckenruhenId: 'RUHE000000000006',
     ril100: 'FPAP',
     bstLangname: 'Papierfabrik',
@@ -205,126 +205,126 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
     zeitraum: { beginn: '2026-01-22T00:00:00', ende: '2026-12-11T05:20:00' },
   };
 
-  // Fake-Resolver (in-memory Map ril100 -> [lon, lat]).
+  // Fake resolver (in-memory map ril100 -> [lon, lat]).
   const fakeCoords = new Map<string, [number, number]>([
     ['EEK', [8.0, 50.9]],
     ['EBLB', [8.4, 51.0]],
   ]);
   const resolveCoord: CoordResolver = (ril100) => fakeCoords.get(ril100.trim()) ?? null;
 
-  // now = Montag 2026-07-06 22:00 -> deckt Baustellen- und Streckenruhen-Fenster ab.
+  // now = Monday 2026-07-06 22:00 -> covers the construction and closure windows.
   const now = new Date(2026, 6, 6, 22, 0, 0);
-  const rohdaten: RawNetworkStatus = {
-    stoerungen: [stoerung, sammel, stoerungAbschnitt, stoerungOhneOrt],
-    baustellen: [baustelle],
-    streckenruhen: [streckenruhe],
-    sammelmeldungen: [sammel],
+  const raw: RawNetworkStatus = {
+    stoerungen: [disruption, aggregate, disruptionViaSection, disruptionUnlocated],
+    baustellen: [constructionSite],
+    streckenruhen: [lineClosure],
+    sammelmeldungen: [aggregate],
   };
-  const r = buildGeoJson(rohdaten, now, resolveCoord);
+  const r = buildGeoJson(raw, now, resolveCoord);
 
-  // Stoerungen: 2 verortete (koordinaten + abschnitte); Sammelmeldung + ohne-Ort NICHT dabei.
-  assert.strictEqual(r.stoerungen.features.length, 2, `stoerungen: ${r.stoerungen.features.length}`);
-  const sf = r.stoerungen.features[0]!;
-  assert.strictEqual(sf.properties.kategorie, 'stoerung', 'kategorie stoerung');
-  assert.strictEqual(sf.geometry!.type, 'LineString', 'stoerung -> LineString');
+  // Disruptions: 2 located (koordinaten + abschnitte); aggregate + unlocated NOT included.
+  assert.strictEqual(r.disruptions.features.length, 2, `disruptions: ${r.disruptions.features.length}`);
+  const sf = r.disruptions.features[0]!;
+  assert.strictEqual(sf.properties.category, 'disruption', 'category disruption');
+  assert.strictEqual(sf.geometry!.type, 'LineString', 'disruption -> LineString');
   const coords = sf.geometry!.coordinates as [number, number][];
-  assert.strictEqual(coords.length, 2, 'LineString mit 2 Punkten');
+  assert.strictEqual(coords.length, 2, 'LineString with 2 points');
   for (const [lon, lat] of coords) {
     assert.ok(lon > 5 && lon < 16, `lon in DE: ${lon}`);
     assert.ok(lat > 47 && lat < 56, `lat in DE: ${lat}`);
   }
 
-  // Abschnitts-verortete Stoerung: LineString aus 2 aufgeloesten RL100-Enden.
-  const abschnittFeat = r.stoerungen.features.find((f) => f.properties.key === 'BZI_ABS');
-  assert.ok(abschnittFeat, 'Abschnitts-Stoerung muss verortet sein');
-  assert.strictEqual(abschnittFeat!.geometry!.type, 'LineString', 'Abschnitt -> LineString');
-  const absCoords = abschnittFeat!.geometry!.coordinates as [number, number][];
-  assert.strictEqual(absCoords.length, 2, 'Abschnitt-LineString mit 2 Punkten');
-  assert.deepStrictEqual(absCoords, [
+  // Section-located disruption: LineString from 2 resolved RL100 ends.
+  const sectionFeat = r.disruptions.features.find((f) => f.properties.key === 'BZI_ABS');
+  assert.ok(sectionFeat, 'section-located disruption must be located');
+  assert.strictEqual(sectionFeat!.geometry!.type, 'LineString', 'section -> LineString');
+  const sectionCoords = sectionFeat!.geometry!.coordinates as [number, number][];
+  assert.strictEqual(sectionCoords.length, 2, 'section LineString with 2 points');
+  assert.deepStrictEqual(sectionCoords, [
     [8.0, 50.9],
     [8.4, 51.0],
   ]);
-  for (const [lon, lat] of absCoords) {
-    assert.ok(lon > 5 && lon < 16, `abs lon in DE: ${lon}`);
-    assert.ok(lat > 47 && lat < 56, `abs lat in DE: ${lat}`);
+  for (const [lon, lat] of sectionCoords) {
+    assert.ok(lon > 5 && lon < 16, `section lon in DE: ${lon}`);
+    assert.ok(lat > 47 && lat < 56, `section lat in DE: ${lat}`);
   }
 
-  // Sammelmeldung NICHT in stoerungen.
+  // The aggregate notice is NOT in disruptions.
   assert.ok(
-    !r.stoerungen.features.some((f) => f.properties.key === 'BZI_28777'),
-    'Sammelmeldung darf nicht in stoerungen sein',
+    !r.disruptions.features.some((f) => f.properties.key === 'BZI_28777'),
+    'aggregate notice must not be in disruptions',
   );
-  // Nicht-verortbare Stoerung NICHT in features, aber in stoerungenOhneOrt gezaehlt.
+  // The unlocatable disruption is NOT in features, but counted in unlocatedDisruptions.
   assert.ok(
-    !r.stoerungen.features.some((f) => f.properties.key === 'BZI_NIX'),
-    'Stoerung ohne Ort darf nicht in features sein',
+    !r.disruptions.features.some((f) => f.properties.key === 'BZI_NIX'),
+    'unlocated disruption must not be in features',
   );
-  assert.strictEqual(r.counts.stoerungenOhneOrt, 1, `stoerungenOhneOrt: ${r.counts.stoerungenOhneOrt}`);
+  assert.strictEqual(r.counts.unlocatedDisruptions, 1, `unlocatedDisruptions: ${r.counts.unlocatedDisruptions}`);
 
-  // Baustelle vorhanden (von==bis -> Point).
-  assert.strictEqual(r.baustellen.features.length, 1, `baustellen: ${r.baustellen.features.length}`);
-  assert.strictEqual(r.baustellen.features[0]!.properties.kategorie, 'baustelle');
-  assert.strictEqual(r.baustellen.features[0]!.geometry!.type, 'Point', 'von==bis -> Point');
+  // Construction site present (from==to -> Point).
+  assert.strictEqual(r.constructionSites.features.length, 1, `constructionSites: ${r.constructionSites.features.length}`);
+  assert.strictEqual(r.constructionSites.features[0]!.properties.category, 'construction');
+  assert.strictEqual(r.constructionSites.features[0]!.geometry!.type, 'Point', 'from==to -> Point');
 
-  // Streckenruhe vorhanden.
-  assert.strictEqual(r.streckenruhen.features.length, 1, `streckenruhen: ${r.streckenruhen.features.length}`);
-  assert.strictEqual(r.streckenruhen.features[0]!.geometry!.type, 'Point', 'streckenruhe -> Point');
+  // Line closure present.
+  assert.strictEqual(r.lineClosures.features.length, 1, `lineClosures: ${r.lineClosures.features.length}`);
+  assert.strictEqual(r.lineClosures.features[0]!.geometry!.type, 'Point', 'line closure -> Point');
 
-  // Sammelmeldungen-Liste enthaelt die Sammelmeldung (mit deduplizierten Verkehrsarten).
-  assert.strictEqual(r.sammelmeldungen.length, 1, `sammelmeldungen: ${r.sammelmeldungen.length}`);
-  assert.strictEqual(r.sammelmeldungen[0]!.key, 'BZI_28777');
-  assert.deepStrictEqual(r.sammelmeldungen[0]!.verkehrsarten, ['SGV']);
+  // The aggregate-notice list contains the notice (with deduplicated transport modes).
+  assert.strictEqual(r.aggregateNotices.length, 1, `aggregateNotices: ${r.aggregateNotices.length}`);
+  assert.strictEqual(r.aggregateNotices[0]!.key, 'BZI_28777');
+  assert.deepStrictEqual(r.aggregateNotices[0]!.transportModes, ['SGV']);
 
-  // counts konsistent.
+  // counts consistent.
   assert.deepStrictEqual(r.counts, {
-    stoerungen: 2,
-    stoerungenOhneOrt: 1,
-    baustellen: 1,
-    streckenruhen: 1,
-    sammelmeldungen: 1,
+    disruptions: 2,
+    unlocatedDisruptions: 1,
+    constructionSites: 1,
+    lineClosures: 1,
+    aggregateNotices: 1,
   });
 }
 
-// --- stoerungenListe: verortete + nicht verortete Stoerungen ---
+// --- disruptionNotices: located + unlocated disruptions ---
 {
-  const now = new Date(2026, 6, 6, 12, 0, 0); // Montag 12:00, aktiv
+  const now = new Date(2026, 6, 6, 12, 0, 0); // Monday 12:00, active
   const zeitraum = { beginn: '2026-07-01T00:00:00', ende: '2026-12-31T23:59:59' };
   const resolve: CoordResolver = (r) => (r === 'AA' ? [9.9, 48.4] : null);
-  const roh: RawNetworkStatus = {
+  const raw: RawNetworkStatus = {
     stoerungen: [
       { key: 'v', cause: 'Signalstoerung', subcause: 'x', text: 'verortet',
         zeitraum, betriebsstellen: [{ ril100: 'AA' }],
         wirkungenMitVerkehrsarten: [{ wirkung: 'Sperrung', verkehrsarten: ['FV', 'NV'] }] },
       { key: 'o', cause: 'Oberleitung', subcause: 'y', text: 'ohne Ort',
-        zeitraum, gleisEinschraenkung: 'SCHWER' }, // keine Geo-Quelle -> nicht verortbar
+        zeitraum, gleisEinschraenkung: 'SCHWER' }, // no geo source -> not locatable
       { key: 's', cause: 'Sonstige Unregelmäßigkeit', subcause: '', text: 'Sammelmeldung',
-        zeitraum, sammelmeldung: true }, // Sammelmeldung -> darf NICHT in stoerungenListe landen
+        zeitraum, sammelmeldung: true }, // aggregate -> must NOT end up in disruptionNotices
     ],
     baustellen: [],
     streckenruhen: [],
     sammelmeldungen: [],
   };
 
-  const r = buildGeoJson(roh, now, resolve);
+  const r = buildGeoJson(raw, now, resolve);
 
-  assert.strictEqual(r.stoerungen.features.length, 1, 'nur verortete in features');
-  assert.strictEqual(r.stoerungenListe.length, 2, 'nur Nicht-Sammelmeldungen in stoerungenListe');
-  const verortet = r.stoerungenListe.find((m) => m.key === 'v');
-  const ohneOrt = r.stoerungenListe.find((m) => m.key === 'o');
-  assert.ok(verortet && verortet.verortet === true, 'v ist verortet');
-  assert.deepStrictEqual(verortet!.verkehrsarten.sort(), ['FV', 'NV'], 'verkehrsarten flach');
-  assert.ok(ohneOrt && ohneOrt.verortet === false, 'o ist nicht verortet');
-  assert.strictEqual(ohneOrt!.gleisEinschraenkung, 'SCHWER', 'gleisEinschraenkung uebernommen');
-  assert.strictEqual(r.counts.stoerungenOhneOrt, 1, 'ohne-Ort-Zaehler unveraendert');
+  assert.strictEqual(r.disruptions.features.length, 1, 'only located ones in features');
+  assert.strictEqual(r.disruptionNotices.length, 2, 'only non-aggregates in disruptionNotices');
+  const located = r.disruptionNotices.find((m) => m.key === 'v');
+  const unlocated = r.disruptionNotices.find((m) => m.key === 'o');
+  assert.ok(located && located.located === true, 'v is located');
+  assert.deepStrictEqual(located!.transportModes.sort(), ['FV', 'NV'], 'transport modes flattened');
+  assert.ok(unlocated && unlocated.located === false, 'o is not located');
+  assert.strictEqual(unlocated!.trackRestriction, 'SCHWER', 'trackRestriction carried over');
+  assert.strictEqual(r.counts.unlocatedDisruptions, 1, 'unlocated counter unchanged');
   assert.ok(
-    !r.stoerungenListe.some((m) => m.key === 's'),
-    'Sammelmeldung (sammelmeldung:true) darf nicht in stoerungenListe sein',
+    !r.disruptionNotices.some((m) => m.key === 's'),
+    'aggregate (sammelmeldung:true) must not be in disruptionNotices',
   );
 }
 
-// --- Verlauf statt Luftlinie (resolveAlignment): Stoerungs-Abschnitte + Baustellen ---
+// --- Alignment instead of straight line (resolveAlignment): disruption sections + construction ---
 {
-  const now = new Date(2026, 6, 6, 12, 0, 0); // Montag 12:00
+  const now = new Date(2026, 6, 6, 12, 0, 0); // Monday 12:00
   const zeitraum = { beginn: '2026-07-01T00:00:00', ende: '2026-12-31T23:59:59' };
   const fakeCoords = new Map<string, [number, number]>([
     ['EEK', [8.0, 50.9]],
@@ -333,20 +333,20 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
     ['XBB', [9.5, 49.2]],
   ]);
   const resolveCoord: CoordResolver = (ril100) => fakeCoords.get(ril100.trim()) ?? null;
-  // Fake-Verlauf: kennt nur EEK<->EBLB (3 Punkte); Richtung muss stimmen.
-  const verlaufAufrufe: Array<[string, string, number[] | undefined]> = [];
-  const resolveAlignment = (von: string, bis: string, strecken?: number[]): [number, number][] | null => {
-    verlaufAufrufe.push([von, bis, strecken]);
-    if (von === 'EEK' && bis === 'EBLB') return [[8.0, 50.9], [8.2, 50.95], [8.4, 51.0]];
-    if (von === 'EBLB' && bis === 'EEK') return [[8.4, 51.0], [8.2, 50.95], [8.0, 50.9]];
-    // Bft-Code, den resolveCoord NICHT kennt (der echte Resolver loest ihn
-    // ueber die Basis-Betriebsstelle auf).
-    if (von === 'EEK Q' && bis === 'EBLB') return [[8.01, 50.91], [8.2, 50.95], [8.4, 51.0]];
+  // Fake alignment: knows only EEK<->EBLB (3 points); the direction must match.
+  const alignmentCalls: Array<[string, string, number[] | undefined]> = [];
+  const resolveAlignment = (from: string, to: string, lines?: number[]): [number, number][] | null => {
+    alignmentCalls.push([from, to, lines]);
+    if (from === 'EEK' && to === 'EBLB') return [[8.0, 50.9], [8.2, 50.95], [8.4, 51.0]];
+    if (from === 'EBLB' && to === 'EEK') return [[8.4, 51.0], [8.2, 50.95], [8.0, 50.9]];
+    // Sub-station code that resolveCoord does NOT know (the real resolver
+    // resolves it via the base operating point).
+    if (from === 'EEK Q' && to === 'EBLB') return [[8.01, 50.91], [8.2, 50.95], [8.4, 51.0]];
     return null;
   };
 
-  // Stoerung mit Hin- UND Rueckrichtung (wie in echten Daten) -> EIN geroutetes Segment.
-  const stoerungHinRueck = {
+  // Disruption with forward AND backward direction (as in real data) -> ONE routed segment.
+  const disruptionBothWays = {
     key: 'BZI_DUP',
     cause: 'Störung am Fahrweg', subcause: '', text: 'Hin+Rueck.',
     zeitraum,
@@ -355,15 +355,15 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
       { von: { ril100: 'EBLB' }, bis: { ril100: 'EEK' }, streckennummer: 2871 },
     ],
   };
-  // Stoerung, deren Verlauf NICHT aufloesbar ist -> Luftlinie (2 Punkte) bleibt.
-  const stoerungFallback = {
+  // Disruption whose alignment is NOT resolvable -> straight line (2 points) stays.
+  const disruptionFallback = {
     key: 'BZI_FALLBACK',
     cause: 'Störung am Fahrweg', subcause: '', text: 'Fallback.',
     zeitraum,
     abschnitte: [{ von: { ril100: 'XAA' }, bis: { ril100: 'XBB' }, streckennummer: 1 }],
   };
-  // Baustelle von!=bis mit beiden RIL100 -> gerouteter Verlauf.
-  const baustelleVerlauf = {
+  // Construction from!=to with both RIL100 -> routed alignment.
+  const constructionRouted = {
     baustellenID: 'B_VERLAUF', arbeiten: 'Gleisbau', zeitraum,
     streckennummern: [2871],
     ril100Von: 'EEK', ril100Bis: 'EBLB',
@@ -372,8 +372,8 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
       bis: { x: 935000, y: 6620000 },
     },
   };
-  // Baustelle, deren Verlauf nicht aufloesbar ist -> Luftlinie (2 Punkte).
-  const baustelleFallback = {
+  // Construction whose alignment is not resolvable -> straight line (2 points).
+  const constructionFallback = {
     baustellenID: 'B_FALLBACK', arbeiten: 'Gleisbau', zeitraum,
     ril100Von: 'XAA', ril100Bis: 'XBB',
     koordinaten: {
@@ -384,68 +384,68 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
 
   const r = buildGeoJson(
     {
-      stoerungen: [stoerungHinRueck, stoerungFallback],
-      baustellen: [baustelleVerlauf, baustelleFallback],
+      stoerungen: [disruptionBothWays, disruptionFallback],
+      baustellen: [constructionRouted, constructionFallback],
       streckenruhen: [], sammelmeldungen: [],
     },
     now, resolveCoord, resolveAlignment,
   );
 
-  // Hin+Rueck dedupliziert -> EIN LineString mit der gerouteten 3-Punkte-Kette.
-  const dup = r.stoerungen.features.find((f) => f.properties.key === 'BZI_DUP')!;
-  assert.ok(dup, 'BZI_DUP verortet');
-  assert.strictEqual(dup.geometry!.type, 'LineString', 'Hin+Rueck -> EIN Segment (dedupliziert)');
+  // Forward+backward deduplicated -> ONE LineString with the routed 3-point chain.
+  const dup = r.disruptions.features.find((f) => f.properties.key === 'BZI_DUP')!;
+  assert.ok(dup, 'BZI_DUP located');
+  assert.strictEqual(dup.geometry!.type, 'LineString', 'forward+backward -> ONE segment (deduplicated)');
   assert.deepStrictEqual(dup.geometry!.coordinates, [[8.0, 50.9], [8.2, 50.95], [8.4, 51.0]]);
-  // Streckennummer wird an den Resolver durchgereicht.
-  assert.deepStrictEqual(verlaufAufrufe[0], ['EEK', 'EBLB', [2871]], 'streckennummer durchgereicht');
+  // The line number is passed through to the resolver.
+  assert.deepStrictEqual(alignmentCalls[0], ['EEK', 'EBLB', [2871]], 'line number passed through');
 
-  // Bft-Ende ("EEK Q"): resolveCoord kennt es nicht, der Verlaufs-Versuch muss
-  // trotzdem stattfinden (Gate sind die RIL-Codes, nicht resolveCoord).
-  const stoerungBft = {
+  // Sub-station end ("EEK Q"): resolveCoord does not know it, but the alignment
+  // attempt must still happen (the gate is the RIL codes, not resolveCoord).
+  const disruptionSubStation = {
     key: 'BZI_BFT',
     cause: 'Störung am Fahrweg', subcause: '', text: 'Bft-Ende.',
     zeitraum,
     abschnitte: [{ von: { ril100: 'EEK Q' }, bis: { ril100: 'EBLB' }, streckennummer: 2871 }],
   };
-  const rBft = buildGeoJson(
-    { stoerungen: [stoerungBft], baustellen: [], streckenruhen: [], sammelmeldungen: [] },
+  const rSub = buildGeoJson(
+    { stoerungen: [disruptionSubStation], baustellen: [], streckenruhen: [], sammelmeldungen: [] },
     now, resolveCoord, resolveAlignment,
   );
-  const bft = rBft.stoerungen.features.find((f) => f.properties.key === 'BZI_BFT')!;
-  assert.ok(bft, 'BZI_BFT verortet');
-  assert.strictEqual(bft.geometry!.type, 'LineString', 'Bft-Abschnitt wird geroutet statt Punkt');
-  assert.strictEqual((bft.geometry!.coordinates as unknown[]).length, 3);
+  const sub = rSub.disruptions.features.find((f) => f.properties.key === 'BZI_BFT')!;
+  assert.ok(sub, 'BZI_BFT located');
+  assert.strictEqual(sub.geometry!.type, 'LineString', 'sub-station section is routed instead of a point');
+  assert.strictEqual((sub.geometry!.coordinates as unknown[]).length, 3);
 
-  // Nicht aufloesbarer Verlauf -> Luftlinie wie bisher.
-  const fb = r.stoerungen.features.find((f) => f.properties.key === 'BZI_FALLBACK')!;
+  // Unresolvable alignment -> straight line as before.
+  const fb = r.disruptions.features.find((f) => f.properties.key === 'BZI_FALLBACK')!;
   assert.strictEqual(fb.geometry!.type, 'LineString');
-  assert.deepStrictEqual(fb.geometry!.coordinates, [[9.0, 49.0], [9.5, 49.2]], 'Fallback = Luftlinie');
+  assert.deepStrictEqual(fb.geometry!.coordinates, [[9.0, 49.0], [9.5, 49.2]], 'fallback = straight line');
 
-  // Baustelle mit Verlauf -> geroutete Kette; ohne -> Luftlinie aus Mercator-Koordinaten.
-  const bv = r.baustellen.features.find((f) => f.properties.id === 'B_VERLAUF')!;
+  // Construction with alignment -> routed chain; without -> straight line from mercator coordinates.
+  const bv = r.constructionSites.features.find((f) => f.properties.id === 'B_VERLAUF')!;
   assert.strictEqual(bv.geometry!.type, 'LineString');
-  assert.strictEqual((bv.geometry!.coordinates as unknown[]).length, 3, 'Baustelle geroutet (3 Punkte)');
-  const bf = r.baustellen.features.find((f) => f.properties.id === 'B_FALLBACK')!;
+  assert.strictEqual((bv.geometry!.coordinates as unknown[]).length, 3, 'construction routed (3 points)');
+  const bf = r.constructionSites.features.find((f) => f.properties.id === 'B_FALLBACK')!;
   assert.strictEqual(bf.geometry!.type, 'LineString');
-  assert.strictEqual((bf.geometry!.coordinates as unknown[]).length, 2, 'Baustelle Fallback = Luftlinie');
+  assert.strictEqual((bf.geometry!.coordinates as unknown[]).length, 2, 'construction fallback = straight line');
 
-  // Baustelle von==bis bleibt Punkt, auch mit Resolver.
-  const punktBaustelle = {
+  // Construction from==to stays a point, even with a resolver.
+  const constructionPoint = {
     baustellenID: 'B_PUNKT', arbeiten: 'x', zeitraum,
     ril100Von: 'EEK', ril100Bis: 'EBLB',
     koordinaten: { von: { x: 890000, y: 6600000 }, bis: { x: 890000, y: 6600000 } },
   };
   const r2 = buildGeoJson(
-    { stoerungen: [], baustellen: [punktBaustelle], streckenruhen: [], sammelmeldungen: [] },
+    { stoerungen: [], baustellen: [constructionPoint], streckenruhen: [], sammelmeldungen: [] },
     now, resolveCoord, resolveAlignment,
   );
-  assert.strictEqual(r2.baustellen.features[0]!.geometry!.type, 'Point', 'von==bis bleibt Punkt');
+  assert.strictEqual(r2.constructionSites.features[0]!.geometry!.type, 'Point', 'from==to stays a point');
 
-  // --- 2-Punkt-koordinaten (Luftlinie) mit routbaren abschnitten: Gleisverlauf hat Vorrang ---
+  // --- 2-point koordinaten (straight line) with routable sections: the track alignment wins ---
   {
-    // Direkte 2-Punkt-koordinaten SIND selbst eine Luftlinie. Liefern die abschnitte
-    // einen gleisgenauen Verlauf, muss dieser die Gerade schlagen (Kern des Fixes).
-    const stoerungKoordUndVerlauf = {
+    // Direct 2-point koordinaten ARE themselves a straight line. When the sections
+    // yield a track-accurate alignment, it must beat the straight line (core of the fix).
+    const disruptionCoordsAndAlignment = {
       key: 'BZI_KOORD_VERLAUF',
       cause: 'Störung am Fahrweg', subcause: '', text: 'koordinaten + routbare abschnitte.',
       zeitraum,
@@ -455,8 +455,8 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
       ],
       abschnitte: [{ von: { ril100: 'EEK' }, bis: { ril100: 'EBLB' }, streckennummer: 2871 }],
     };
-    // 2-Punkt-koordinaten mit abschnitten, die NICHT routen -> koordinaten bleiben (kein Regress).
-    const stoerungKoordOhneVerlauf = {
+    // 2-point koordinaten with sections that do NOT route -> the koordinaten stay (no regression).
+    const disruptionCoordsNoAlignment = {
       key: 'BZI_KOORD_FALLBACK',
       cause: 'Störung am Fahrweg', subcause: '', text: 'koordinaten + nicht routbare abschnitte.',
       zeitraum,
@@ -468,81 +468,81 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
     };
     const rk = buildGeoJson(
       {
-        stoerungen: [stoerungKoordUndVerlauf, stoerungKoordOhneVerlauf],
+        stoerungen: [disruptionCoordsAndAlignment, disruptionCoordsNoAlignment],
         baustellen: [], streckenruhen: [], sammelmeldungen: [],
       },
       now, resolveCoord, resolveAlignment,
     );
-    const kv = rk.stoerungen.features.find((f) => f.properties.key === 'BZI_KOORD_VERLAUF')!;
-    assert.ok(kv, 'BZI_KOORD_VERLAUF verortet');
-    assert.strictEqual(kv.geometry!.type, 'LineString', 'gerouteter Verlauf gewinnt gegen 2-Punkt-koordinaten');
+    const kv = rk.disruptions.features.find((f) => f.properties.key === 'BZI_KOORD_VERLAUF')!;
+    assert.ok(kv, 'BZI_KOORD_VERLAUF located');
+    assert.strictEqual(kv.geometry!.type, 'LineString', 'routed alignment beats the 2-point koordinaten');
     assert.deepStrictEqual(
       kv.geometry!.coordinates,
       [[8.0, 50.9], [8.2, 50.95], [8.4, 51.0]],
-      'Gleiskette statt 2-Punkt-Luftlinie',
+      'track chain instead of the 2-point straight line',
     );
-    // Nicht routbar -> die direkten koordinaten (Luftlinie) bleiben erhalten.
-    const kf = rk.stoerungen.features.find((f) => f.properties.key === 'BZI_KOORD_FALLBACK')!;
+    // Not routable -> the direct koordinaten (straight line) are kept.
+    const kf = rk.disruptions.features.find((f) => f.properties.key === 'BZI_KOORD_FALLBACK')!;
     assert.strictEqual(kf.geometry!.type, 'LineString');
     assert.strictEqual(
       (kf.geometry!.coordinates as unknown[]).length,
       2,
-      'ohne Verlauf: koordinaten-Luftlinie bleibt',
+      'without alignment: the koordinaten straight line stays',
     );
   }
 }
 
 console.log('SELFTEST OK');
 
-// --- 4) LIVE-Smoke (Netz + echte ISR-Daten): counts, Verlaufs-Routing + Dauer loggen ---
+// --- 4) LIVE smoke (network + real ISR data): log counts, alignment routing + duration ---
 {
   try {
-    // Echte Betriebsstellen + Graph laden: RL100-Geocoding UND Verlaufs-Routing echt testen.
+    // Load real operating points + graph: tests RL100 geocoding AND alignment routing for real.
     const data = new IsrData();
     const resolver = new AlignmentResolver(data.graph, data.stations);
     const t0 = Date.now();
     const r = await new NetworkStatusService(data.stations, { alignment: resolver.resolve }).getData();
-    console.log(`LIVE Dauer inkl. Verlaufs-Routing: ${Date.now() - t0} ms`);
+    console.log(`LIVE duration incl. alignment routing: ${Date.now() - t0} ms`);
     console.log('LIVE counts:', JSON.stringify(r.counts));
-    const verortet = r.counts.stoerungen;
-    const gesamt = r.counts.stoerungen + r.counts.stoerungenOhneOrt;
-    console.log(`LIVE Stoerungen verortet: ${verortet}/${gesamt}`);
-    // Wie viele Linien folgen dem Gleis (>2 Punkte) statt der Luftlinie (==2)?
-    const linienStat = (fc: { features: Array<{ geometry: { type: string; coordinates: unknown } | null }> }) => {
-      let geroutet = 0, luftlinie = 0;
+    const located = r.counts.disruptions;
+    const total = r.counts.disruptions + r.counts.unlocatedDisruptions;
+    console.log(`LIVE disruptions located: ${located}/${total}`);
+    // How many lines follow the track (>2 points) instead of the straight line (==2)?
+    const lineStats = (fc: { features: Array<{ geometry: { type: string; coordinates: unknown } | null }> }) => {
+      let routed = 0, straight = 0;
       for (const f of fc.features) {
         const g = f.geometry;
         const segs = g?.type === 'LineString' ? [g.coordinates as unknown[]]
           : g?.type === 'MultiLineString' ? (g.coordinates as unknown[][]) : [];
-        for (const s of segs) (s.length > 2 ? geroutet++ : luftlinie++);
+        for (const s of segs) (s.length > 2 ? routed++ : straight++);
       }
-      return `${geroutet} geroutet / ${luftlinie} Luftlinie`;
+      return `${routed} routed / ${straight} straight`;
     };
-    console.log(`LIVE Stoerungs-Linien: ${linienStat(r.stoerungen)}`);
-    console.log(`LIVE Baustellen-Linien: ${linienStat(r.baustellen)}`);
-    if (r.error != null) console.warn('LIVE WARNUNG error:', r.error);
+    console.log(`LIVE disruption lines: ${lineStats(r.disruptions)}`);
+    console.log(`LIVE construction lines: ${lineStats(r.constructionSites)}`);
+    if (r.error != null) console.warn('LIVE WARNING error:', r.error);
     else console.log('LIVE error: null');
   } catch (e) {
-    // getData() sollte nie werfen; falls doch, nur als Warnung ausgeben.
-    console.warn('LIVE unerwartet geworfen:', e instanceof Error ? e.message : String(e));
+    // getData() should never throw; if it does anyway, only warn.
+    console.warn('LIVE threw unexpectedly:', e instanceof Error ? e.message : String(e));
   }
 }
 
-// --- LIVE-Smoke: force + onRefresh (nur Logging) ---
-// IsrData-Konstruktion in try/catch: in CI fehlen die (gitignorierten) Datendateien,
-// dann wirft der GraphBuilder -> Block sauber ueberspringen statt den Testlauf abbrechen.
+// --- LIVE smoke: force + onRefresh (logging only) ---
+// IsrData construction in try/catch: in CI the (gitignored) data files are missing,
+// then the GraphBuilder throws -> skip this block cleanly instead of aborting the run.
 try {
   const isr = new IsrData();
   let refreshed = 0;
   const svc = new NetworkStatusService(isr.stations, { onRefresh: () => { refreshed++; } });
-  const erst = await svc.getData();             // 1. echter Scrape (Fehler stehen im error-Feld, kein throw)
-  if (erst.error) {
-    console.log('[live] uebersprungen (kein Netz):', erst.error);
+  const first = await svc.getData();             // 1st real scrape (errors go to the error field, no throw)
+  if (first.error) {
+    console.log('[live] skipped (no network):', first.error);
   } else {
-    await svc.getData();                         // Cache-Treffer -> refreshed unveraendert
-    await svc.getData({ force: true });          // erzwungen -> refreshed++
-    console.log(`[live] onRefresh-Aufrufe (erwartet 2): ${refreshed}`);
+    await svc.getData();                          // cache hit -> refreshed unchanged
+    await svc.getData({ force: true });           // forced -> refreshed++
+    console.log(`[live] onRefresh calls (expected 2): ${refreshed}`);
   }
 } catch (e) {
-  console.log('[live] uebersprungen (keine ISR-Daten):', e instanceof Error ? e.message : String(e));
+  console.log('[live] skipped (no ISR data):', e instanceof Error ? e.message : String(e));
 }

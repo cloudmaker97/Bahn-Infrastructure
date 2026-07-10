@@ -2,7 +2,7 @@
 // der Browser spricht ausschließlich /api/* und /data/* an (im Dev via Next-rewrites
 // auf den Node-Server durchgereicht, im Prod gleiche Origin).
 import type {
-  LiveTripsResult, RouteMode, RouteResponse, StationSuggestion, StreckenInfoResult, VersionInfo,
+  LiveTripsResult, NetworkStatusResult, RouteMode, RouteResponse, StationSuggestion, VersionInfo,
 } from './types';
 
 /** GET + JSON mit Fehlerprüfung (HTTP-Status ≠ 2xx wirft). */
@@ -21,8 +21,9 @@ export function getLiveTrips(zoom: number): Promise<LiveTripsResult> {
   return getJson<LiveTripsResult>(`/api/livetrips?zoom=${Math.round(zoom)}`);
 }
 
-export function getStreckenInfo(): Promise<StreckenInfoResult> {
-  return getJson<StreckenInfoResult>('/api/streckeninfo');
+/** Network status (disruptions/construction/closures); the URL is a stable contract. */
+export function getNetworkStatus(): Promise<NetworkStatusResult> {
+  return getJson<NetworkStatusResult>('/api/streckeninfo');
 }
 
 /** Statische GeoJSON-Overlay-Datei (z. B. /data/map_tunnel.geojson). */

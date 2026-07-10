@@ -4,8 +4,8 @@
 // transform.ts so they stay testable without network access.
 import type {
   AlignmentLookup,
+  NetworkStatusResult,
   StationLookup,
-  StreckenInfoResult,
 } from '../../types.js';
 import type {
   CoordResolver,
@@ -15,7 +15,7 @@ import type {
 } from './wire.js';
 import { buildGeoJson } from './transform.js';
 
-export type { StreckenInfoResult, SammelmeldungDTO, StoerungMeldungDTO } from '../../types.js';
+export type { NetworkStatusResult, AggregateNoticeDTO, DisruptionNoticeDTO } from '../../types.js';
 
 // --- Network constants ---
 
@@ -51,7 +51,7 @@ export class NetworkStatusService {
   private readonly ttlMs: number;
   private readonly onRefresh: (() => void) | null;
   private readonly alignment: AlignmentLookup | undefined;
-  private cache: { data: StreckenInfoResult; ts: number } | null = null;
+  private cache: { data: NetworkStatusResult; ts: number } | null = null;
 
   constructor(
     private stations: StationLookup,
@@ -87,15 +87,15 @@ export class NetworkStatusService {
   };
 
   /** Empty result with an optional error message. */
-  private static empty(error: string | null, generatedAt: string): StreckenInfoResult {
+  private static empty(error: string | null, generatedAt: string): NetworkStatusResult {
     return {
-      stoerungen: { type: 'FeatureCollection', features: [], totalFeatures: 0 },
-      baustellen: { type: 'FeatureCollection', features: [], totalFeatures: 0 },
-      streckenruhen: { type: 'FeatureCollection', features: [], totalFeatures: 0 },
-      sammelmeldungen: [],
-      stoerungenListe: [],
+      disruptions: { type: 'FeatureCollection', features: [], totalFeatures: 0 },
+      constructionSites: { type: 'FeatureCollection', features: [], totalFeatures: 0 },
+      lineClosures: { type: 'FeatureCollection', features: [], totalFeatures: 0 },
+      aggregateNotices: [],
+      disruptionNotices: [],
       generatedAt,
-      counts: { stoerungen: 0, stoerungenOhneOrt: 0, baustellen: 0, streckenruhen: 0, sammelmeldungen: 0 },
+      counts: { disruptions: 0, unlocatedDisruptions: 0, constructionSites: 0, lineClosures: 0, aggregateNotices: 0 },
       error,
     };
   }
@@ -167,7 +167,7 @@ export class NetworkStatusService {
    * Cached (TTL). NEVER throws: on error the (possibly stale) cached result is
    * returned with `error` set, otherwise an empty result with `error`.
    */
-  async getData(opts?: { force?: boolean }): Promise<StreckenInfoResult> {
+  async getData(opts?: { force?: boolean }): Promise<NetworkStatusResult> {
     const nowMs = Date.now();
     if (!opts?.force && this.cache && nowMs - this.cache.ts < this.ttlMs) {
       return this.cache.data;
@@ -189,7 +189,7 @@ export class NetworkStatusService {
         this.resolveCoord,
         this.alignment,
       );
-      const data: StreckenInfoResult = { ...built, generatedAt: now.toISOString(), error: null };
+      const data: NetworkStatusResult = { ...built, generatedAt: now.toISOString(), error: null };
       this.cache = { data, ts: nowMs };
       try {
         if (this.onRefresh) this.onRefresh(); // only after a real scrape

@@ -1,12 +1,14 @@
 // Shared type definitions for the ISR project: domain types plus the service
 // abstractions (DIP/ISP hub). API contract types live in src/shared/api-types.ts
 // (single source for server AND web) and are re-exported here for convenience.
-import type { FeatureCollection, LatLng, RouteMode, StationSuggestion } from './shared/api-types.js';
+import type { LatLng, NetworkStatusResult, RouteMode, StationSuggestion } from './shared/api-types.js';
 
 export type {
   LatLng, GeoFeature, FeatureCollection,
   VersionInfo, LiveTripsResult, StationSuggestion,
   RouteMode, RouteWaypoint, RouteSegment, RouteResult, RouteError, RouteResponse,
+  NetworkStatusCategory, EffectDTO, ValidityDTO,
+  AggregateNoticeDTO, DisruptionNoticeDTO, NetworkStatusResult,
 } from './shared/api-types.js';
 
 export type Coord = [number, number]; // [lon, lat] (GeoJSON convention)
@@ -93,48 +95,7 @@ export interface SearchEntry {
   data: Record<string, unknown>; // full raw data
 }
 
-// --- Public strecken-info data contract (delivered 1:1 as JSON) ---
-
-export interface SammelmeldungDTO {
-  key: string;
-  cause: string;
-  subcause: string;
-  text: string;
-  beginn: string;
-  ende: string;
-  verkehrsarten: string[];
-}
-
-export interface StoerungMeldungDTO {
-  key: string;
-  cause: string;
-  subcause: string;
-  text: string;
-  beginn: string;
-  ende: string;
-  verkehrsarten: string[];
-  gleisEinschraenkung: string;
-  verortet: boolean; // does the disruption have a resolvable geometry?
-}
-
-export interface StreckenInfoResult {
-  stoerungen: FeatureCollection; // only located AND currently active (for the map)
-  baustellen: FeatureCollection;
-  streckenruhen: FeatureCollection;
-  sammelmeldungen: SammelmeldungDTO[];
-  stoerungenListe: StoerungMeldungDTO[]; // ALL active disruptions (also unlocated) for lists/TUI
-  generatedAt: string;
-  counts: {
-    stoerungen: number;
-    stoerungenOhneOrt: number;
-    baustellen: number;
-    streckenruhen: number;
-    sammelmeldungen: number;
-  };
-  error: string | null;
-}
-
 /** Only the view of the network status that the TUI needs (DIP/ISP). */
 export interface MeldungenProvider {
-  getData(opts?: { force?: boolean }): Promise<StreckenInfoResult>;
+  getData(opts?: { force?: boolean }): Promise<NetworkStatusResult>;
 }

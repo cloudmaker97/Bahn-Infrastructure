@@ -2,13 +2,13 @@
 // Keine Seiteneffekte, keine IO -> gut testbar. Fuer Strecken wird die Abschnittsliste angezeigt.
 import { ESC, bold, dim, inv, c, pad, stripAnsi, wrap, KIND_COLOR } from './ansi.js';
 import type { SectionLookup, SectionProps, SearchEntry } from '../types.js';
-import type { StreckenInfoResult } from '../types.js';
+import type { NetworkStatusResult } from '../types.js';
 
 export type TuiMode = 'list' | 'detail' | 'meldungen';
 
 export interface MeldungenView {
   status: 'idle' | 'loading' | 'refreshing' | 'ready';
-  data: StreckenInfoResult | null;
+  data: NetworkStatusResult | null;
 }
 
 export interface TuiState {
@@ -126,21 +126,21 @@ export class TuiRenderer {
     lines.push(dim('─'.repeat(W)));
 
     const body: string[] = [];
-    const st = data.stoerungenListe;
-    const sm = data.sammelmeldungen;
-    if (st.length === 0 && sm.length === 0 && !data.error) {
+    const disruptions = data.disruptionNotices;
+    const aggregates = data.aggregateNotices;
+    if (disruptions.length === 0 && aggregates.length === 0 && !data.error) {
       body.push(dim(' Keine aktuellen Meldungen.'));
     }
-    if (st.length > 0) {
-      body.push(bold(` Störungen (${st.length})`));
-      for (const m of st) this.meldungBlock(body, m.cause, m.subcause, m.text,
-        m.beginn, m.ende, m.verkehrsarten, m.gleisEinschraenkung, m.verortet ? '' : 'ohne Ort', W);
+    if (disruptions.length > 0) {
+      body.push(bold(` Störungen (${disruptions.length})`));
+      for (const m of disruptions) this.meldungBlock(body, m.cause, m.subcause, m.text,
+        m.start, m.end, m.transportModes, m.trackRestriction, m.located ? '' : 'ohne Ort', W);
     }
-    if (sm.length > 0) {
-      if (st.length > 0) body.push('');
-      body.push(bold(` Sammelmeldungen (${sm.length})`));
-      for (const m of sm) this.meldungBlock(body, m.cause, m.subcause, m.text,
-        m.beginn, m.ende, m.verkehrsarten, '', '', W);
+    if (aggregates.length > 0) {
+      if (disruptions.length > 0) body.push('');
+      body.push(bold(` Sammelmeldungen (${aggregates.length})`));
+      for (const m of aggregates) this.meldungBlock(body, m.cause, m.subcause, m.text,
+        m.start, m.end, m.transportModes, '', '', W);
     }
 
     this.pushScrollWindow(body, state.meldungenScroll, H, lines);
@@ -158,23 +158,23 @@ export class TuiRenderer {
     }
   }
 
-  /** Ein Meldungs-Block: Titelzeile + umgebrochener Text + Metazeile. */
+  /** One notice block: title line + wrapped text + meta line. */
   private meldungBlock(
     body: string[], cause: string, subcause: string, text: string,
-    beginn: string, ende: string, verkehrsarten: string[],
-    gleis: string, marker: string, W: number,
+    start: string, end: string, transportModes: string[],
+    trackRestriction: string, marker: string, W: number,
   ): void {
-    const titel = [cause || 'Meldung', subcause].filter(Boolean).join(' – ');
+    const title = [cause || 'Meldung', subcause].filter(Boolean).join(' – ');
     const mk = marker ? '  ' + dim('(' + marker + ')') : '';
-    body.push(' ' + c('33', titel) + mk);
-    for (const zeile of wrap(String(text).trim(), Math.max(20, W - 3))) {
-      if (zeile) body.push('   ' + zeile);
+    body.push(' ' + c('33', title) + mk);
+    for (const line of wrap(String(text).trim(), Math.max(20, W - 3))) {
+      if (line) body.push('   ' + line);
     }
     const meta: string[] = [];
-    const zeit = [beginn, ende].filter(Boolean).join(' – ');
-    if (zeit) meta.push(zeit);
-    if (verkehrsarten.length) meta.push(verkehrsarten.join('/'));
-    if (gleis) meta.push('Gleis: ' + gleis);
+    const period = [start, end].filter(Boolean).join(' – ');
+    if (period) meta.push(period);
+    if (transportModes.length) meta.push(transportModes.join('/'));
+    if (trackRestriction) meta.push('Gleis: ' + trackRestriction);
     if (meta.length) body.push('   ' + dim(meta.join('   ·   ')));
   }
 

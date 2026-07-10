@@ -86,3 +86,58 @@ export interface RouteError {
 }
 
 export type RouteResponse = RouteResult | RouteError;
+
+// --- Network status (strecken-info.de) contract: GET /api/streckeninfo ---
+
+/** Category discriminator in the GeoJSON feature properties (`category`). */
+export type NetworkStatusCategory = 'disruption' | 'construction' | 'closure';
+
+/** One effect of a disruption, with the transport modes it applies to. */
+export interface EffectDTO {
+  effect: string;
+  transportModes: string[];
+}
+
+/** One validity window of a construction site / line closure. */
+export interface ValidityDTO {
+  startDate?: string; // "YYYY-MM-DD"
+  endDate?: string; // "YYYY-MM-DD"
+  weekdays?: string[]; // upstream values MONTAG..SONNTAG (displayed as-is)
+  startTime?: string; // "HH:MM:SS"
+  endTime?: string; // "HH:MM:SS"
+}
+
+/** Aggregate notice (no geometry) from GET /api/streckeninfo. */
+export interface AggregateNoticeDTO {
+  key: string;
+  cause: string;
+  subcause: string;
+  text: string;
+  start: string;
+  end: string;
+  transportModes: string[];
+}
+
+/** Disruption notice for lists/TUI (geometry-independent). */
+export interface DisruptionNoticeDTO extends AggregateNoticeDTO {
+  trackRestriction: string;
+  located: boolean; // does the disruption have a resolvable geometry?
+}
+
+/** Response of GET /api/streckeninfo (server-cached, TTL 3 min). */
+export interface NetworkStatusResult {
+  disruptions: FeatureCollection; // only located AND currently active (for the map)
+  constructionSites: FeatureCollection;
+  lineClosures: FeatureCollection;
+  aggregateNotices: AggregateNoticeDTO[];
+  disruptionNotices: DisruptionNoticeDTO[]; // ALL active disruptions (also unlocated) for lists/TUI
+  generatedAt: string;
+  counts: {
+    disruptions: number;
+    unlocatedDisruptions: number;
+    constructionSites: number;
+    lineClosures: number;
+    aggregateNotices: number;
+  };
+  error: string | null;
+}

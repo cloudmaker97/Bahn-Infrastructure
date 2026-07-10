@@ -10,11 +10,11 @@ import { IsrOverlays, OVERLAY_EINTRAEGE, type OverlayKey } from '@/map/isr-overl
 import { NearbyPicker } from '@/map/nearby';
 import { RouteLayer } from '@/map/route';
 import { StreckenLayer, type ColorMode } from '@/map/strecken';
-import { StreckenInfoLayers, type SiKategorie, type SiPanelDaten } from '@/map/streckeninfo';
+import { NetworkStatusLayers, type NetworkStatusCategory, type NetworkStatusPanelData } from '@/map/network-status';
 import { TrainsLayer } from '@/map/trains';
 import LayerControl, { type LayerEntry } from './LayerControl';
 import RoutingForm from './RoutingForm';
-import Sammelmeldungen from './Sammelmeldungen';
+import AggregateNotices from './AggregateNotices';
 import SearchForm from './SearchForm';
 import SidePanel, { type StreckenStatus } from './SidePanel';
 import VersionBadge from './VersionBadge';
@@ -23,7 +23,7 @@ export default function MapApp() {
   const mapDiv = useRef<HTMLDivElement | null>(null);
   const streckenRef = useRef<StreckenLayer | null>(null);
   const trainsRef = useRef<TrainsLayer | null>(null);
-  const streckeninfoRef = useRef<StreckenInfoLayers | null>(null);
+  const networkStatusRef = useRef<NetworkStatusLayers | null>(null);
   const overlaysRef = useRef<IsrOverlays | null>(null);
   const routeRef = useRef<RouteLayer | null>(null);
 
@@ -32,15 +32,15 @@ export default function MapApp() {
   // Störungen AN, Baustellen/Streckenruhen und alle ISR-Overlays AUS.
   const [liveOn, setLiveOn] = useState(true);
   const [realtimeOnly, setRealtimeOnly] = useState(true);
-  const [siOn, setSiOn] = useState<Record<SiKategorie, boolean>>({
-    stoerung: true, baustelle: false, ruhe: false,
+  const [siOn, setSiOn] = useState<Record<NetworkStatusCategory, boolean>>({
+    disruption: true, construction: false, closure: false,
   });
   const [overlayOn, setOverlayOn] = useState<Partial<Record<OverlayKey, boolean>>>({});
 
   const [streckenStatus, setStreckenStatus] = useState<StreckenStatus>({ text: 'Lade Daten …', frac: null });
   const [siStatus, setSiStatus] = useState('');
   const [trainsStatus, setTrainsStatus] = useState('');
-  const [siDaten, setSiDaten] = useState<SiPanelDaten | null>(null);
+  const [siDaten, setSiDaten] = useState<NetworkStatusPanelData | null>(null);
   const [overlayCounts, setOverlayCounts] = useState<Partial<Record<OverlayKey, number>>>({});
 
   // Karte + Layer einmalig aufbauen (und beim Unmount vollständig abbauen).
@@ -49,37 +49,37 @@ export default function MapApp() {
     const controller = new MapController(mapDiv.current);
     const strecken = new StreckenLayer(controller, (text, frac) => setStreckenStatus({ text, frac }));
     const trains = new TrainsLayer(controller, setTrainsStatus, { realtimeOnly: true });
-    const streckeninfo = new StreckenInfoLayers(controller, strecken, setSiStatus, setSiDaten);
+    const networkStatus = new NetworkStatusLayers(controller, strecken, setSiStatus, setSiDaten);
     const overlays = new IsrOverlays(controller, strecken, (key, count) =>
       setOverlayCounts((prev) => ({ ...prev, [key]: count })));
     const route = new RouteLayer(controller);
     const nearby = new NearbyPicker(controller);
     streckenRef.current = strecken;
     trainsRef.current = trains;
-    streckeninfoRef.current = streckeninfo;
+    networkStatusRef.current = networkStatus;
     overlaysRef.current = overlays;
     routeRef.current = route;
 
-    // Ruhen-Linien nachziehen, sobald die Strecken-Geometrie (idIndex) geladen ist.
-    void strecken.load().then(() => streckeninfo.rebuildRuhen());
-    streckeninfo.start();
+    // Redraw the closure lines once the line geometry (id index) is loaded.
+    void strecken.load().then(() => networkStatus.rebuildClosures());
+    networkStatus.start();
     overlays.loadAll();
 
     controller.onReady(() => {
-      // E2E-Hooks: Karte, Controller und Layer-Module global verfügbar machen.
+      // E2E hooks: expose map, controller, and layer modules globally.
       (window as unknown as Record<string, unknown>)['__ISR__'] = {
-        map: controller.map, controller, trains, streckeninfo, overlays,
+        map: controller.map, controller, trains, networkStatus, overlays,
       };
     });
 
     return () => {
       nearby.dispose();
-      streckeninfo.dispose();
+      networkStatus.dispose();
       trains.dispose();
       controller.dispose();
       streckenRef.current = null;
       trainsRef.current = null;
-      streckeninfoRef.current = null;
+      networkStatusRef.current = null;
       overlaysRef.current = null;
       routeRef.current = null;
     };
@@ -95,9 +95,11 @@ export default function MapApp() {
   }, [liveOn]);
   useEffect(() => { trainsRef.current?.setRealtimeOnly(realtimeOnly); }, [realtimeOnly]);
   useEffect(() => {
-    const si = streckeninfoRef.current;
+    const si = networkStatusRef.current;
     if (!si) return;
-    for (const [kat, on] of Object.entries(siOn) as Array<[SiKategorie, boolean]>) si.setVisible(kat, on);
+    for (const [category, on] of Object.entries(siOn) as Array<[NetworkStatusCategory, boolean]>) {
+      si.setVisible(category, on);
+    }
   }, [siOn]);
   useEffect(() => {
     const overlays = overlaysRef.current;
@@ -121,9 +123,9 @@ export default function MapApp() {
   ];
   if (siDaten) {
     layerItems.push(
-      { key: 'si-stoerung', label: 'Störungen', count: siDaten.counts.stoerungen, checked: siOn.stoerung },
-      { key: 'si-baustelle', label: 'Baustellen', count: siDaten.counts.baustellen, checked: siOn.baustelle, indent: true },
-      { key: 'si-ruhe', label: 'Streckenruhen', count: siDaten.counts.streckenruhen, checked: siOn.ruhe, indent: true },
+      { key: 'si-disruption', label: 'Störungen', count: siDaten.counts.disruptions, checked: siOn.disruption },
+      { key: 'si-construction', label: 'Baustellen', count: siDaten.counts.constructionSites, checked: siOn.construction, indent: true },
+      { key: 'si-closure', label: 'Streckenruhen', count: siDaten.counts.lineClosures, checked: siOn.closure, indent: true },
     );
   }
   const overlayItems: LayerEntry[] = [];
@@ -141,7 +143,7 @@ export default function MapApp() {
     if (key === 'live') setLiveOn(on);
     else if (key === 'live-rt') setRealtimeOnly(on);
     else if (key.startsWith('si-')) {
-      setSiOn((prev) => ({ ...prev, [key.slice(3) as SiKategorie]: on }));
+      setSiOn((prev) => ({ ...prev, [key.slice(3) as NetworkStatusCategory]: on }));
     } else if (key.startsWith('ov-')) {
       setOverlayOn((prev) => ({ ...prev, [key.slice(3) as OverlayKey]: on }));
     }
@@ -163,7 +165,7 @@ export default function MapApp() {
             onClear={() => routeRef.current?.clear()}
           />
         )}
-        sammelSlot={<Sammelmeldungen items={siDaten?.sammelmeldungen ?? []} />}
+        sammelSlot={<AggregateNotices items={siDaten?.aggregateNotices ?? []} />}
       />
       <LayerControl items={layerItems} onToggle={handleToggle} />
       <VersionBadge />
