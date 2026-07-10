@@ -1,7 +1,8 @@
 // Live trains: polling via our own server API /api/livetrips (NO direct
 // Transitous call – the server caches and filters), smooth movement via
-// position interpolation (source.setData every 200 ms), "realtime only" filter,
-// hover tooltip and detail popup. Single responsibility: train overlay.
+// position interpolation (source.setData every 200 ms), sub-filters ("realtime
+// only", "long-distance only"), hover tooltip and detail popup. Single
+// responsibility: train overlay.
 import type { LayerSpecification, MapGeoJSONFeature, MapLayerMouseEvent } from 'maplibre-gl';
 import { getLiveTrips } from '@/lib/api';
 import { escapeHtml, fmtTimeHM } from '@/lib/format';
@@ -59,6 +60,7 @@ export interface TrainHit {
 export class TrainsLayer {
   private entries: TrainEntry[] = [];
   private realtimeOnly: boolean;
+  private longDistanceOnly: boolean;
   private active = false;
   private layerReady = false;
   private inFlight = false;
@@ -88,9 +90,10 @@ export class TrainsLayer {
   constructor(
     private controller: MapController,
     private onStatus: (text: string) => void,
-    opts: { realtimeOnly?: boolean } = {},
+    opts: { realtimeOnly?: boolean; longDistanceOnly?: boolean } = {},
   ) {
     this.realtimeOnly = opts.realtimeOnly ?? true;
+    this.longDistanceOnly = opts.longDistanceOnly ?? false;
     this.tooltip = new HoverTooltip(controller.map);
 
     controller.onReady(() => {
@@ -145,19 +148,22 @@ export class TrainsLayer {
   /** Toggles the "realtime only" filter (applies immediately to the rendered list). */
   setRealtimeOnly(on: boolean): void {
     this.realtimeOnly = on;
-    if (this.active) {
-      const shown = this.renderFrame();
-      this.updateStatus(shown);
-    }
+    this.refreshAfterFilterChange();
+  }
+
+  /** Toggles the "long-distance only" filter (applies immediately to the rendered list). */
+  setLongDistanceOnly(on: boolean): void {
+    this.longDistanceOnly = on;
+    this.refreshAfterFilterChange();
   }
 
   /**
    * Current positions of the loaded trains matching the query (full name like
-   * "ICE 577" or bare train number). Respects the "realtime only" filter so
-   * the hits are exactly the trains that are visible on the map.
+   * "ICE 577" or bare train number). Respects the sub-filters so the hits are
+   * exactly the trains that are visible on the map.
    */
   locate(query: string): TrainHit[] {
-    const candidates = this.realtimeOnly ? this.entries.filter((e) => e.dto.realTime) : this.entries;
+    const candidates = this.filteredEntries();
     const now = Date.now();
     const hits: TrainHit[] = [];
     for (const { dto, track } of candidates) {
@@ -193,6 +199,20 @@ export class TrainsLayer {
     };
     this.controller.addLayerOnce(layer);
     this.controller.setVisible(TRAINS_LAYER_ID, this.active);
+  }
+
+  private refreshAfterFilterChange(): void {
+    if (this.active) {
+      const shown = this.renderFrame();
+      this.updateStatus(shown);
+    }
+  }
+
+  /** Entries passing the active sub-filters – exactly the trains shown on the map. */
+  private filteredEntries(): TrainEntry[] {
+    return this.entries.filter((e) =>
+      (!this.realtimeOnly || e.dto.realTime) &&
+      (!this.longDistanceOnly || e.dto.category === 'long-distance'));
   }
 
   private scheduleRefetch(): void {
@@ -237,7 +257,7 @@ export class TrainsLayer {
    */
   private renderFrame(): number {
     if (!this.layerReady) return 0;
-    const shown = this.realtimeOnly ? this.entries.filter((e) => e.dto.realTime) : this.entries;
+    const shown = this.filteredEntries();
     const now = Date.now();
     const features: GeoJSON.Feature[] = [];
     for (const { dto, track } of shown) {
@@ -277,8 +297,12 @@ export class TrainsLayer {
       return;
     }
     // The server always delivers all trains in Germany (DE bbox, cached) – not just the viewport.
+    const filters = [
+      this.realtimeOnly ? 'nur Echtzeit' : null,
+      this.longDistanceOnly ? 'nur Fernverkehr' : null,
+    ].filter(Boolean).join(', ');
     this.onStatus(
-      `Live-Züge: ${shown} in Deutschland${this.realtimeOnly ? ' (nur Echtzeit)' : ''}` +
+      `Live-Züge: ${shown} in Deutschland${filters ? ` (${filters})` : ''}` +
       (this.stamp ? ` · Stand ${this.stamp}` : ''),
     );
   }
