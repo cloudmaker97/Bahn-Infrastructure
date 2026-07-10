@@ -19,11 +19,11 @@ export const DEFAULT_SPEED = 50; // km/h fallback for sections without a speed
 export const WFS_BASE = 'https://geoviewer.deutschebahn.com/geoviewer-geoserver/ows';
 
 /** strecken-info.de – source of the live network status (construction, disruptions, closures). */
-export const STRECKENINFO_API = 'https://strecken-info.de/api';
+export const NETWORK_STATUS_API = 'https://strecken-info.de/api';
 /** WebSocket for the initial handshake (delivers the current revision number). */
-export const STRECKENINFO_WS = 'wss://strecken-info.de/api/websocket';
+export const NETWORK_STATUS_WS = 'wss://strecken-info.de/api/websocket';
 /** Cache duration of the network-status data (ms) – limits requests to strecken-info.de. */
-export const STRECKENINFO_TTL_MS = 3 * 60 * 1000;
+export const NETWORK_STATUS_TTL_MS = 3 * 60 * 1000;
 
 /** Transitous map/trips – source of the live train positions (server is authoritative). */
 export const LIVETRIPS_API = 'https://api.transitous.org/api/v6/map/trips';

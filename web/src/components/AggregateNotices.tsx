@@ -15,7 +15,7 @@ interface AggregateNoticesProps {
 export default function AggregateNotices({ items }: AggregateNoticesProps) {
   if (!items.length) return null;
   return (
-    <div className="sammel">
+    <div className="notices">
       <details open>
         <summary>Sammelmeldungen ({items.length})</summary>
         <div className="list">
@@ -25,9 +25,9 @@ export default function AggregateNotices({ items }: AggregateNoticesProps) {
             const period = fmtPeriod(s.start, s.end);
             return (
               <div className="item" key={s.key || `${s.cause}-${i}`}>
-                <div className="titel">{s.cause || 'Sammelmeldung'}</div>
+                <div className="title">{s.cause || 'Sammelmeldung'}</div>
                 {shortText ? <div className="text">{shortText}</div> : null}
-                {period ? <div className="zeit">{period}</div> : null}
+                {period ? <div className="period">{period}</div> : null}
               </div>
             );
           })}

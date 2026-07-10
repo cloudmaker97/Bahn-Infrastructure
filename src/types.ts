@@ -47,7 +47,11 @@ export interface PathResult {
 
 // --- Abstractions (DIP/ISP): high-level modules depend on these, not on classes ---
 
-/** Only the view of operating points that routing needs. */
+/**
+ * Only the view of operating points that routing needs.
+ * "stel" is the official ISR node id (STEL_ID), "RL100" the official DB
+ * abbreviation code — both are kept as domain terms.
+ */
 export interface StationLookup {
   resolveStel(code: string | undefined): number | null;
   getStation(stel: number): Station | undefined;

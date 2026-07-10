@@ -12,7 +12,7 @@ import AggregateNotices from './AggregateNotices';
 import LayerControl, { type LayerEntry } from './LayerControl';
 import RoutingForm from './RoutingForm';
 import SearchForm from './SearchForm';
-import SidePanel, { type StreckenStatus } from './SidePanel';
+import SidePanel, { type RailNetworkStatus } from './SidePanel';
 import { useMapLayers } from './use-map-layers';
 import VersionBadge from './VersionBadge';
 
@@ -22,21 +22,21 @@ export default function MapApp() {
   // disruptions ON, construction/closures and all ISR overlays OFF.
   const [liveOn, setLiveOn] = useState(true);
   const [realtimeOnly, setRealtimeOnly] = useState(true);
-  const [siOn, setSiOn] = useState<Record<NetworkStatusCategory, boolean>>({
+  const [statusOn, setStatusOn] = useState<Record<NetworkStatusCategory, boolean>>({
     disruption: true, construction: false, closure: false,
   });
   const [overlayOn, setOverlayOn] = useState<Partial<Record<OverlayKey, boolean>>>({});
 
-  const [streckenStatus, setStreckenStatus] = useState<StreckenStatus>({ text: 'Lade Daten …', frac: null });
-  const [siStatus, setSiStatus] = useState('');
+  const [railNetworkStatus, setRailNetworkStatus] = useState<RailNetworkStatus>({ text: 'Lade Daten …', frac: null });
+  const [networkStatusText, setNetworkStatusText] = useState('');
   const [trainsStatus, setTrainsStatus] = useState('');
-  const [siDaten, setSiDaten] = useState<NetworkStatusPanelData | null>(null);
+  const [networkStatusData, setNetworkStatusData] = useState<NetworkStatusPanelData | null>(null);
   const [overlayCounts, setOverlayCounts] = useState<Partial<Record<OverlayKey, number>>>({});
 
   const layers = useMapLayers({
-    onRailStatus: (text, frac) => setStreckenStatus({ text, frac }),
-    onNetworkStatusText: setSiStatus,
-    onNetworkStatusData: setSiDaten,
+    onRailStatus: (text, frac) => setRailNetworkStatus({ text, frac }),
+    onNetworkStatusText: setNetworkStatusText,
+    onNetworkStatusData: setNetworkStatusData,
     onTrainsStatus: setTrainsStatus,
     onOverlayCount: (key, count) => setOverlayCounts((prev) => ({ ...prev, [key]: count })),
   });
@@ -53,10 +53,10 @@ export default function MapApp() {
   useEffect(() => {
     const si = layers.networkStatus.current;
     if (!si) return;
-    for (const [category, on] of Object.entries(siOn) as Array<[NetworkStatusCategory, boolean]>) {
+    for (const [category, on] of Object.entries(statusOn) as Array<[NetworkStatusCategory, boolean]>) {
       si.setVisible(category, on);
     }
-  }, [layers, siOn]);
+  }, [layers, statusOn]);
   useEffect(() => {
     const overlays = layers.overlays.current;
     if (!overlays) return;
@@ -68,7 +68,7 @@ export default function MapApp() {
   // Line search: highlight + zoom in the layer, status message as in the old frontend.
   const handleSearch = (nr: string): void => {
     const n = layers.railNetwork.current?.search(nr) ?? 0;
-    setStreckenStatus({ text: n > 0 ? `Strecke ${nr}: ${n} Abschnitt(e)` : `Strecke ${nr} nicht gefunden` });
+    setRailNetworkStatus({ text: n > 0 ? `Strecke ${nr}: ${n} Abschnitt(e)` : `Strecke ${nr} nicht gefunden` });
   };
 
   // Layer control: entries + per-key toggle actions built together (no string
@@ -82,16 +82,16 @@ export default function MapApp() {
     live: setLiveOn,
     'live-rt': setRealtimeOnly,
   };
-  if (siDaten) {
+  if (networkStatusData) {
     const statusEntries: Array<{ category: NetworkStatusCategory; label: string; count: number; indent?: boolean }> = [
-      { category: 'disruption', label: 'Störungen', count: siDaten.counts.disruptions },
-      { category: 'construction', label: 'Baustellen', count: siDaten.counts.constructionSites, indent: true },
-      { category: 'closure', label: 'Streckenruhen', count: siDaten.counts.lineClosures, indent: true },
+      { category: 'disruption', label: 'Störungen', count: networkStatusData.counts.disruptions },
+      { category: 'construction', label: 'Baustellen', count: networkStatusData.counts.constructionSites, indent: true },
+      { category: 'closure', label: 'Streckenruhen', count: networkStatusData.counts.lineClosures, indent: true },
     ];
     for (const { category, label, count, indent } of statusEntries) {
-      const key = `si-${category}`;
-      layerItems.push({ key, label, count, checked: siOn[category], indent });
-      toggles[key] = (on) => setSiOn((prev) => ({ ...prev, [category]: on }));
+      const key = `ns-${category}`;
+      layerItems.push({ key, label, count, checked: statusOn[category], indent });
+      toggles[key] = (on) => setStatusOn((prev) => ({ ...prev, [category]: on }));
     }
   }
   const overlayItems: LayerEntry[] = [];
@@ -112,8 +112,8 @@ export default function MapApp() {
       <SidePanel
         colorMode={colorMode}
         onColorModeChange={setColorMode}
-        streckenStatus={streckenStatus}
-        streckeninfoStatus={siStatus}
+        railNetworkStatus={railNetworkStatus}
+        networkStatusText={networkStatusText}
         trainsStatus={trainsStatus}
         searchSlot={<SearchForm onSearch={handleSearch} />}
         routingSlot={(
@@ -122,7 +122,7 @@ export default function MapApp() {
             onClear={() => layers.route.current?.clear()}
           />
         )}
-        sammelSlot={<AggregateNotices items={siDaten?.aggregateNotices ?? []} />}
+        noticesSlot={<AggregateNotices items={networkStatusData?.aggregateNotices ?? []} />}
       />
       <LayerControl items={layerItems} onToggle={handleToggle} />
       <VersionBadge />

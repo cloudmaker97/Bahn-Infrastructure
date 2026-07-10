@@ -6,9 +6,9 @@
 import type { ReactNode } from 'react';
 import { LEGENDS, type ColorMode } from '@/map/color-scales';
 
-/** Status line of the network loading: frac 0..1 = bar, null = indeterminate,
+/** Status line of the rail-network loading: frac 0..1 = bar, null = indeterminate,
  *  undefined = no bar anymore (done or error). */
-export interface StreckenStatus {
+export interface RailNetworkStatus {
   text: string;
   frac?: number | null;
 }
@@ -16,21 +16,21 @@ export interface StreckenStatus {
 interface SidePanelProps {
   colorMode: ColorMode;
   onColorModeChange: (mode: ColorMode) => void;
-  streckenStatus: StreckenStatus;
+  railNetworkStatus: RailNetworkStatus;
   /** Status line "Streckeninfo: N Störungen · …" (empty = hidden). */
-  streckeninfoStatus: string;
+  networkStatusText: string;
   trainsStatus: string;
   /** Content slots (search, routing, aggregate notices) in panel order. */
   searchSlot?: ReactNode;
   routingSlot?: ReactNode;
-  sammelSlot?: ReactNode;
+  noticesSlot?: ReactNode;
 }
 
 export default function SidePanel({
-  colorMode, onColorModeChange, streckenStatus, streckeninfoStatus, trainsStatus,
-  searchSlot, routingSlot, sammelSlot,
+  colorMode, onColorModeChange, railNetworkStatus, networkStatusText, trainsStatus,
+  searchSlot, routingSlot, noticesSlot,
 }: SidePanelProps) {
-  const { text, frac } = streckenStatus;
+  const { text, frac } = railNetworkStatus;
   return (
     <div className="panel">
       <div className="panel-body">
@@ -69,10 +69,10 @@ export default function SidePanel({
           )}
           <span>{text}</span>
         </div>
-        {streckeninfoStatus ? <div className="status-line">{streckeninfoStatus}</div> : null}
+        {networkStatusText ? <div className="status-line">{networkStatusText}</div> : null}
         {trainsStatus ? <div className="status-line">{trainsStatus}</div> : null}
 
-        {sammelSlot}
+        {noticesSlot}
       </div>
     </div>
   );

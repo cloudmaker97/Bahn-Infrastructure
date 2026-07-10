@@ -1,5 +1,5 @@
-// Baut aus der Web-GeoJSON der Streckenabschnitte den Routing-Graphen.
-// Verantwortung: Graphaufbau (SRP). Haengt von Abstraktionen (JsonStore) ab.
+// Builds the routing graph from the web GeoJSON of the line sections.
+// Responsibility: graph construction (SRP). Depends on abstractions (JsonStore).
 import { Graph } from '../core/graph.js';
 import { parseGermanNumber, polylineLengthKm, stitchSegments } from '../core/geometry.js';
 import { DEFAULT_SPEED } from '../config.js';

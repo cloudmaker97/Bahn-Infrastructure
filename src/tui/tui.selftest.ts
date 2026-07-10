@@ -123,4 +123,4 @@ import type { SectionLookup } from '../types.js';
   assert.match(stationFrame, /12,3 → 18,7/, 'station: km range visible');
 }
 
-console.log('TUI-Teil A+B (wrap, input, renderMeldungen) OK');
+console.log('TUI selftest OK (wrap, input, renderNotices)');

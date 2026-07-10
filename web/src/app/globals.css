@@ -102,14 +102,14 @@ html,body { margin:0; height:100%; overflow:hidden;
 .nearby-item .label { display:block; overflow-wrap:anywhere; line-height:1.3; }
 
 /* Aggregate-notices box at the bottom of the left panel (collapsible) */
-.sammel { margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }
-.sammel summary { cursor:pointer; font-size:11px; color:var(--muted);
+.notices { margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }
+.notices summary { cursor:pointer; font-size:11px; color:var(--muted);
   text-transform:uppercase; letter-spacing:.04em; font-weight:600; }
-.sammel .list { max-height:220px; overflow:auto; margin-top:8px; }
-.sammel .item { padding:6px 0; border-bottom:1px solid var(--border); }
-.sammel .titel { font-weight:600; }
-.sammel .text { color:var(--muted); margin-top:2px; line-height:1.35; }
-.sammel .zeit { color:var(--muted); font-size:11px; margin-top:2px; }
+.notices .list { max-height:220px; overflow:auto; margin-top:8px; }
+.notices .item { padding:6px 0; border-bottom:1px solid var(--border); }
+.notices .title { font-weight:600; }
+.notices .text { color:var(--muted); margin-top:2px; line-height:1.35; }
+.notices .period { color:var(--muted); font-size:11px; margin-top:2px; }
 
 /* Software version at the bottom right (above the map attribution) */
 .version {

@@ -3,7 +3,7 @@
 import { exec } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { PORT, WEB_OUT, DATA_WEB, STRECKENINFO_API, STRECKENINFO_WS, STRECKENINFO_TTL_MS } from './config.js';
+import { PORT, WEB_OUT, DATA_WEB, NETWORK_STATUS_API, NETWORK_STATUS_WS, NETWORK_STATUS_TTL_MS } from './config.js';
 import { ensureData } from './ensure-data.js';
 import { scrapeAll } from './scrape.js';
 import { buildMapData } from './build-map-data.js';
@@ -46,9 +46,9 @@ const sseHub = new SseHub();
 // Notices follow the real track alignment instead of straight lines.
 const alignmentResolver = new AlignmentResolver(data.pathfinder, data.stations);
 const networkStatus = new NetworkStatusService(data.stations, {
-  apiBase: STRECKENINFO_API,
-  wsUrl: STRECKENINFO_WS,
-  ttlMs: STRECKENINFO_TTL_MS,
+  apiBase: NETWORK_STATUS_API,
+  wsUrl: NETWORK_STATUS_WS,
+  ttlMs: NETWORK_STATUS_TTL_MS,
   onRefresh: () => sseHub.broadcast('streckeninfo'),
   alignment: alignmentResolver.resolve,
 });

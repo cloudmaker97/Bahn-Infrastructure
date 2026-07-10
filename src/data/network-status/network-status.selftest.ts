@@ -288,17 +288,17 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
 // --- disruptionNotices: located + unlocated disruptions ---
 {
   const now = new Date(2026, 6, 6, 12, 0, 0); // Monday 12:00, active
-  const zeitraum = { beginn: '2026-07-01T00:00:00', ende: '2026-12-31T23:59:59' };
+  const period = { beginn: '2026-07-01T00:00:00', ende: '2026-12-31T23:59:59' };
   const resolve: CoordResolver = (r) => (r === 'AA' ? [9.9, 48.4] : null);
   const raw: RawNetworkStatus = {
     stoerungen: [
       { key: 'v', cause: 'Signalstoerung', subcause: 'x', text: 'verortet',
-        zeitraum, betriebsstellen: [{ ril100: 'AA' }],
+        zeitraum: period, betriebsstellen: [{ ril100: 'AA' }],
         wirkungenMitVerkehrsarten: [{ wirkung: 'Sperrung', verkehrsarten: ['FV', 'NV'] }] },
       { key: 'o', cause: 'Oberleitung', subcause: 'y', text: 'ohne Ort',
-        zeitraum, gleisEinschraenkung: 'SCHWER' }, // no geo source -> not locatable
+        zeitraum: period, gleisEinschraenkung: 'SCHWER' }, // no geo source -> not locatable
       { key: 's', cause: 'Sonstige Unregelmäßigkeit', subcause: '', text: 'Sammelmeldung',
-        zeitraum, sammelmeldung: true }, // aggregate -> must NOT end up in disruptionNotices
+        zeitraum: period, sammelmeldung: true }, // aggregate -> must NOT end up in disruptionNotices
     ],
     baustellen: [],
     streckenruhen: [],
@@ -325,7 +325,7 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
 // --- Alignment instead of straight line (resolveAlignment): disruption sections + construction ---
 {
   const now = new Date(2026, 6, 6, 12, 0, 0); // Monday 12:00
-  const zeitraum = { beginn: '2026-07-01T00:00:00', ende: '2026-12-31T23:59:59' };
+  const period = { beginn: '2026-07-01T00:00:00', ende: '2026-12-31T23:59:59' };
   const fakeCoords = new Map<string, [number, number]>([
     ['EEK', [8.0, 50.9]],
     ['EBLB', [8.4, 51.0]],
@@ -349,7 +349,7 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
   const disruptionBothWays = {
     key: 'BZI_DUP',
     cause: 'Störung am Fahrweg', subcause: '', text: 'Hin+Rueck.',
-    zeitraum,
+    zeitraum: period,
     abschnitte: [
       { von: { ril100: 'EEK' }, bis: { ril100: 'EBLB' }, streckennummer: 2871 },
       { von: { ril100: 'EBLB' }, bis: { ril100: 'EEK' }, streckennummer: 2871 },
@@ -359,12 +359,12 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
   const disruptionFallback = {
     key: 'BZI_FALLBACK',
     cause: 'Störung am Fahrweg', subcause: '', text: 'Fallback.',
-    zeitraum,
+    zeitraum: period,
     abschnitte: [{ von: { ril100: 'XAA' }, bis: { ril100: 'XBB' }, streckennummer: 1 }],
   };
   // Construction from!=to with both RIL100 -> routed alignment.
   const constructionRouted = {
-    baustellenID: 'B_VERLAUF', arbeiten: 'Gleisbau', zeitraum,
+    baustellenID: 'B_VERLAUF', arbeiten: 'Gleisbau', zeitraum: period,
     streckennummern: [2871],
     ril100Von: 'EEK', ril100Bis: 'EBLB',
     koordinaten: {
@@ -374,7 +374,7 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
   };
   // Construction whose alignment is not resolvable -> straight line (2 points).
   const constructionFallback = {
-    baustellenID: 'B_FALLBACK', arbeiten: 'Gleisbau', zeitraum,
+    baustellenID: 'B_FALLBACK', arbeiten: 'Gleisbau', zeitraum: period,
     ril100Von: 'XAA', ril100Bis: 'XBB',
     koordinaten: {
       von: { x: 1000000, y: 6300000 },
@@ -404,7 +404,7 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
   const disruptionSubStation = {
     key: 'BZI_BFT',
     cause: 'Störung am Fahrweg', subcause: '', text: 'Bft-Ende.',
-    zeitraum,
+    zeitraum: period,
     abschnitte: [{ von: { ril100: 'EEK Q' }, bis: { ril100: 'EBLB' }, streckennummer: 2871 }],
   };
   const rSub = buildGeoJson(
@@ -431,7 +431,7 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
 
   // Construction from==to stays a point, even with a resolver.
   const constructionPoint = {
-    baustellenID: 'B_PUNKT', arbeiten: 'x', zeitraum,
+    baustellenID: 'B_PUNKT', arbeiten: 'x', zeitraum: period,
     ril100Von: 'EEK', ril100Bis: 'EBLB',
     koordinaten: { von: { x: 890000, y: 6600000 }, bis: { x: 890000, y: 6600000 } },
   };
@@ -448,7 +448,7 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
     const disruptionCoordsAndAlignment = {
       key: 'BZI_KOORD_VERLAUF',
       cause: 'Störung am Fahrweg', subcause: '', text: 'koordinaten + routbare abschnitte.',
-      zeitraum,
+      zeitraum: period,
       koordinaten: [
         { x: 890000, y: 6600000 },
         { x: 935000, y: 6620000 },
@@ -459,7 +459,7 @@ import { AlignmentResolver } from '../../routing/alignment-resolver.js';
     const disruptionCoordsNoAlignment = {
       key: 'BZI_KOORD_FALLBACK',
       cause: 'Störung am Fahrweg', subcause: '', text: 'koordinaten + nicht routbare abschnitte.',
-      zeitraum,
+      zeitraum: period,
       koordinaten: [
         { x: 1000000, y: 6300000 },
         { x: 1060000, y: 6330000 },
