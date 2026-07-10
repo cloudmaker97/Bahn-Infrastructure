@@ -51,10 +51,17 @@ export class StationRepository implements StationLookup, StationSuggester {
     const query = q.trim().toUpperCase();
     if (!query) return [];
     const out: Station[] = [];
+    // The exact RL100 match always comes first: the alphabetical scan below
+    // would otherwise push it past the limit for prominent short codes (many
+    // station NAMES contain e.g. "TS" and sort before Stuttgart Hbf).
+    const exactStel = this.rl2stel.get(query);
+    const exact = exactStel != null ? this.nodeInfo.get(exactStel) : undefined;
+    if (exact) out.push(exact);
     for (const s of this.stations) {
+      if (out.length >= limit) break;
+      if (s === exact) continue; // already first
       if ((s.rl100 ?? '').toUpperCase().startsWith(query) || s.name.toUpperCase().includes(query)) {
         out.push(s);
-        if (out.length >= limit) break;
       }
     }
     return out;

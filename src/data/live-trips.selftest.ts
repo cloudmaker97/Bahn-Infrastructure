@@ -4,7 +4,7 @@
 import assert from 'node:assert';
 import { decodePolyline, type LatLon } from '../shared/polyline.js';
 import { buildTrack, positionAt, type Ring } from '../shared/geo.js';
-import { isRailMode, categoryOf, normalizeTrips } from '../shared/live-trips-core.js';
+import { isRailMode, categoryOf, matchesTrainQuery, normalizeTrips } from '../shared/live-trips-core.js';
 import { DE_BOUNDARY_RINGS } from '../shared/de-boundary.js';
 import { LiveTripsService } from './live-trips-service.js';
 
@@ -86,7 +86,21 @@ function near(actual: number, expected: number, tol: number, msg: string): void 
   assert.strictEqual(isRailMode('BUS'), false, 'BUS is not railway');
 }
 
-// --- d) normalizeTrips: filters (mode, times, polyline) + DE boundary filter ---
+// --- d) matchesTrainQuery: full name, train number, no partial matches ---
+{
+  assert.ok(matchesTrainQuery('ICE 577', 'ICE 577'), 'exact name matches');
+  assert.ok(matchesTrainQuery('ICE 577', 'ice577'), 'case- and space-insensitive');
+  assert.ok(matchesTrainQuery('ICE 577', '577'), 'train number alone matches');
+  assert.ok(matchesTrainQuery('S 3', 's3'), 'short suburban name matches');
+  assert.ok(matchesTrainQuery('RE 5', '5'), 'single-digit train number matches');
+  assert.ok(!matchesTrainQuery('ICE 1577', '577'), 'number must match completely (no suffix match)');
+  assert.ok(!matchesTrainQuery('ICE 577', 'ICE 57'), 'no name prefix match');
+  assert.ok(!matchesTrainQuery('ICE 577', 'ICE'), 'category alone does not match');
+  assert.ok(!matchesTrainQuery('', '577'), 'empty name never matches');
+  assert.ok(!matchesTrainQuery('ICE 577', '   '), 'blank query never matches');
+}
+
+// --- e) normalizeTrips: filters (mode, times, polyline) + DE boundary filter ---
 {
   // Track with 2 points in Germany; now = mid-journey -> position ~[52.35, 10.2].
   const polyDe = encodePolyline([
@@ -141,7 +155,7 @@ function near(actual: number, expected: number, tol: number, msg: string): void 
   assert.strictEqual(normalizeTrips(fixture, nowMs, farRing).length, 0, 'position outside -> dropped');
 }
 
-// --- e) LiveTripsService: fake fetch (cache per bucket, error path, DE bbox in the URL) ---
+// --- f) LiveTripsService: fake fetch (cache per bucket, error path, DE bbox in the URL) ---
 {
   const nowMs = Date.now();
   const segment = {

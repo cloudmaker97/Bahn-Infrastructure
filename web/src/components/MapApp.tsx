@@ -17,9 +17,9 @@ import { useMapLayers } from './use-map-layers';
 import VersionBadge from './VersionBadge';
 
 export default function MapApp() {
-  const [colorMode, setColorMode] = useState<ColorMode>('electrification');
-  // Defaults as in the old frontend: live trains ON, sub-filter "Nur Echtzeit" ON,
-  // disruptions ON, construction/closures and all ISR overlays OFF.
+  const [colorMode, setColorMode] = useState<ColorMode>('uniform');
+  // Defaults: uniform line color ("Einfarbig"), live trains ON, sub-filter
+  // "Nur Echtzeit" ON, disruptions ON, construction/closures and overlays OFF.
   const [liveOn, setLiveOn] = useState(true);
   const [realtimeOnly, setRealtimeOnly] = useState(true);
   const [statusOn, setStatusOn] = useState<Record<NetworkStatusCategory, boolean>>({
@@ -65,10 +65,12 @@ export default function MapApp() {
     }
   }, [layers, overlayOn]);
 
-  // Line search: highlight + zoom in the layer, status message as in the old frontend.
-  const handleSearch = (nr: string): void => {
-    const n = layers.railNetwork.current?.search(nr) ?? 0;
-    setRailNetworkStatus({ text: n > 0 ? `Strecke ${nr}: ${n} Abschnitt(e)` : `Strecke ${nr} nicht gefunden` });
+  // Unified search (line / RL100 / live train): MapSearch zooms and returns
+  // the status line for the panel.
+  const handleSearch = (q: string): void => {
+    void layers.search.current?.search(q).then((text) => {
+      if (text) setRailNetworkStatus({ text });
+    });
   };
 
   // Layer control: entries + per-key toggle actions built together (no string

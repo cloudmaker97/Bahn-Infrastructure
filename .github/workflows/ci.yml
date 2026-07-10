@@ -43,6 +43,9 @@ jobs:
       - name: Selftest – live trips (service + core logic)
         run: npx tsx src/data/live-trips.selftest.ts
 
+      - name: Selftest – station repository
+        run: npx tsx src/data/station-repository.selftest.ts
+
       - name: Selftest – alignment resolver
         run: npx tsx src/routing/alignment-resolver.selftest.ts
 

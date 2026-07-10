@@ -7,7 +7,7 @@ import { getLiveTrips } from '@/lib/api';
 import { escapeHtml, fmtTimeHM } from '@/lib/format';
 import { buildTrack, positionAt, type Track } from '@shared/geo';
 import {
-  CATEGORY_COLOR, CATEGORY_COLOR_FALLBACK, type TrainCategory, type TrainDTO,
+  CATEGORY_COLOR, CATEGORY_COLOR_FALLBACK, matchesTrainQuery, type TrainCategory, type TrainDTO,
 } from '@shared/live-trips-core';
 import { decodePolyline } from '@shared/polyline';
 import { emptyFeatureCollection, HoverTooltip, TRAINS_LAYER_ID } from './common';
@@ -48,6 +48,12 @@ function trainPopupHtml(props: Record<string, unknown>): string {
 interface TrainEntry {
   dto: TrainDTO;
   track: Track;
+}
+
+/** One search hit among the loaded live trains (current interpolated position). */
+export interface TrainHit {
+  name: string;
+  lngLat: [number, number];
 }
 
 export class TrainsLayer {
@@ -143,6 +149,25 @@ export class TrainsLayer {
       const shown = this.renderFrame();
       this.updateStatus(shown);
     }
+  }
+
+  /**
+   * Current positions of the loaded trains matching the query (full name like
+   * "ICE 577" or bare train number). Respects the "realtime only" filter so
+   * the hits are exactly the trains that are visible on the map.
+   */
+  locate(query: string): TrainHit[] {
+    const candidates = this.realtimeOnly ? this.entries.filter((e) => e.dto.realTime) : this.entries;
+    const now = Date.now();
+    const hits: TrainHit[] = [];
+    for (const { dto, track } of candidates) {
+      if (!matchesTrainQuery(dto.name, query)) continue;
+      const span = dto.arriveMs - dto.departMs;
+      const frac = span > 0 ? (now - dto.departMs) / span : 0;
+      const pos = positionAt(track, frac); // [lat, lon]
+      if (pos) hits.push({ name: dto.name, lngLat: [pos[1], pos[0]] });
+    }
+    return hits;
   }
 
   /** Tears everything down (React cleanup); the controller removes the map itself. */
