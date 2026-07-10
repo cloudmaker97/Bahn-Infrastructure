@@ -12,7 +12,7 @@ export type {
 export type Coord = [number, number]; // [lon, lat] (GeoJSON convention)
 
 /** Properties of a line section (excerpt, graph-relevant). */
-export interface AbschnittProps {
+export interface SectionProps {
   ISR_STRE_NR?: number;
   STRECKEN_ABSCHNITT?: string;
   ISR_STRECKE_VON_BIS?: string;
@@ -78,10 +78,10 @@ export interface EntitySearch {
 }
 
 /** Returns the sections of a line, or the sections attached to an operating point. */
-export interface AbschnittLookup {
-  byStrecke(streckenNr: number): AbschnittProps[];
+export interface SectionLookup {
+  byLineNumber(lineNumber: number): SectionProps[];
   /** All sections where the operating point (STEL_ID) is start or end. */
-  byStation(stel: number): AbschnittProps[];
+  byStation(stel: number): SectionProps[];
 }
 
 /** A searchable entry for the TUI / search API. */

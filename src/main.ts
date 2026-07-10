@@ -87,7 +87,7 @@ async function refreshData(): Promise<string> {
 if (HEADLESS) {
   console.log('Headless-Modus: interaktive TUI deaktiviert – nur HTTP-Server läuft.');
 } else {
-  const tui = new TuiApp(data.search, new TuiRenderer(data.abschnitte), new InputHandler(), streckeninfo, {
+  const tui = new TuiApp(data.search, new TuiRenderer(data.sections), new InputHandler(), streckeninfo, {
     getContext: () => ({ url, requestCount: httpServer.requestCount, totalObjects: data.totalObjects }),
     onOpenBrowser: () => openInBrowser(url),
     onRefreshData: refreshData,

@@ -1,7 +1,7 @@
 // Erzeugt aus dem TUI-Zustand den Bildschirm-Frame (String). Verantwortung: Rendering (SRP).
 // Keine Seiteneffekte, keine IO -> gut testbar. Fuer Strecken wird die Abschnittsliste angezeigt.
 import { ESC, bold, dim, inv, c, pad, stripAnsi, wrap, KIND_COLOR } from './ansi.js';
-import type { AbschnittLookup, AbschnittProps, SearchEntry } from '../types.js';
+import type { SectionLookup, SectionProps, SearchEntry } from '../types.js';
 import type { StreckenInfoResult } from '../types.js';
 
 export type TuiMode = 'list' | 'detail' | 'meldungen';
@@ -34,7 +34,7 @@ export interface TuiContext {
 }
 
 export class TuiRenderer {
-  constructor(private abschnitte: AbschnittLookup) {}
+  constructor(private sections: SectionLookup) {}
 
   render(state: TuiState, ctx: TuiContext, cols: number, rows: number): string {
     const W = Math.max(60, cols);
@@ -181,7 +181,7 @@ export class TuiRenderer {
   /** Body fuer eine Strecke: Kurzinfo + scrollbare Abschnittsliste. */
   private streckenBody(e: SearchEntry, W: number): string[] {
     const nr = Number(e.code);
-    const list = this.abschnitte.byStrecke(nr);
+    const list = this.sections.byLineNumber(nr);
     const body: string[] = [];
     const d = e.data;
     if (d['betreiber']) body.push(` ${c('90', pad('Betreiber', 14))}  ${d['betreiber']}`);
@@ -195,7 +195,7 @@ export class TuiRenderer {
     return body;
   }
 
-  private abschnittRow(a: AbschnittProps, W: number): string {
+  private abschnittRow(a: SectionProps, W: number): string {
     const km = `${a.ISR_KM_VON ?? '?'} → ${a.ISR_KM_BIS ?? '?'}`;
     const vonBis = String(a.ISR_STRECKE_VON_BIS ?? '');
     const laenge = String(a.ALG_LAENGE_ABSCHNITT ?? '').trim();
@@ -208,7 +208,7 @@ export class TuiRenderer {
   private betriebsstelleBody(e: SearchEntry, W: number): string[] {
     const body = this.fieldBody(e, W);
     const stel = Number(e.data['stel']);
-    const list = Number.isFinite(stel) ? this.abschnitte.byStation(stel) : [];
+    const list = Number.isFinite(stel) ? this.sections.byStation(stel) : [];
     body.push('');
     body.push(bold(` Zugehörige Strecken/Abschnitte (${list.length}):`));
     if (list.length === 0) { body.push(dim(' (keine)')); return body; }

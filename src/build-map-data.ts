@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { DATA_RAW, DATA_WEB, LAYERS, NOISE } from './config.js';
 import { round5 } from './core/geometry.js';
-import type { AbschnittProps, FeatureCollection, GeoFeature } from './types.js';
+import type { SectionProps, FeatureCollection, GeoFeature } from './types.js';
 
 const isNoise = (v: unknown): boolean =>
   v == null || (typeof v === 'string' && NOISE.has(v.trim())) || NOISE.has(v as string);
@@ -51,7 +51,7 @@ function buildLayer(key: string, whitelist?: string[]): void {
 
 /** Aggregierte Strecken-Uebersicht (JSON) fuer die Recherche. */
 function buildStreckenUebersicht(): void {
-  const ab = JSON.parse(readFileSync(join(DATA_RAW, 'streckenabschnitte_meta.json'), 'utf8')) as AbschnittProps[];
+  const ab = JSON.parse(readFileSync(join(DATA_RAW, 'streckenabschnitte_meta.json'), 'utf8')) as SectionProps[];
   const map = new Map<number, {
     ISR_STRE_NR: number; anz_abschnitte: number;
     betreiber: Set<string>; staat: Set<string>; verlauf: string;

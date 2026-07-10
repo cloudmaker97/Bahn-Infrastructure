@@ -5,7 +5,7 @@ import { wrap } from './ansi.js';
 import { InputHandler } from './input-handler.js';
 import { TuiRenderer, type TuiState, type MeldungenView } from './tui-renderer.js';
 import { stripAnsi } from './ansi.js';
-import type { AbschnittLookup } from '../types.js';
+import type { SectionLookup } from '../types.js';
 
 // --- ansi.wrap ---
 {
@@ -43,13 +43,13 @@ import type { AbschnittLookup } from '../types.js';
 
 // --- Renderer: renderMeldungen ---
 {
-  const abschnitte: AbschnittLookup = {
-    byStrecke: () => [],
+  const sections: SectionLookup = {
+    byLineNumber: () => [],
     byStation: (stel) => stel === 4242
       ? [{ ISR_STRE_NR: 1733, ISR_STRECKE_VON_BIS: 'Uelzen – Langwedel', ISR_KM_VON: '12,3', ISR_KM_BIS: '18,7' }]
       : [],
   };
-  const rend = new TuiRenderer(abschnitte);
+  const rend = new TuiRenderer(sections);
   const ctx = { url: 'http://x/', requestCount: 0, totalObjects: 0 };
 
   const baseState = (meldungen: MeldungenView): TuiState => ({

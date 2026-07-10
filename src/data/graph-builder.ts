@@ -4,13 +4,13 @@ import { Graph } from '../core/graph.js';
 import { parseGermanNumber, polylineLengthKm, stitchSegments } from '../core/geometry.js';
 import { DEFAULT_SPEED } from '../config.js';
 import type { JsonStore } from './json-store.js';
-import type { AbschnittProps, FeatureCollection, LatLng } from '../types.js';
+import type { SectionProps, FeatureCollection, LatLng } from '../types.js';
 
 export class GraphBuilder {
   constructor(private webStore: JsonStore) {}
 
   build(): Graph {
-    const geo = this.webStore.read<FeatureCollection<AbschnittProps>>('map_streckenabschnitte.geojson');
+    const geo = this.webStore.read<FeatureCollection<SectionProps>>('map_streckenabschnitte.geojson');
     if (!geo) throw new Error('map_streckenabschnitte.geojson fehlt – erst `npm run build:data` ausfuehren.');
     const graph = new Graph();
     for (const f of geo.features) {

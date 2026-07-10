@@ -2,7 +2,7 @@
 // Strecken, Tunnel, Bruecken, Bahnuebergaenge). Verantwortung: Suche (SRP).
 // Implementiert EntitySearch.
 import type { JsonStore } from './json-store.js';
-import type { AbschnittProps, EntitySearch, SearchEntry, Station } from '../types.js';
+import type { SectionProps, EntitySearch, SearchEntry, Station } from '../types.js';
 
 /** Beschreibt, wie aus Rohdaten ein Sucheintrag entsteht (OCP: neue Quellen leicht ergaenzbar). */
 interface EntrySource {
@@ -69,8 +69,8 @@ export class SearchIndex implements EntitySearch {
   }
 
   private addStreckenFallback(): void {
-    const ab = this.rawStore.read<AbschnittProps[]>('streckenabschnitte_meta.json') ?? [];
-    const seen = new Map<number, AbschnittProps>();
+    const ab = this.rawStore.read<SectionProps[]>('streckenabschnitte_meta.json') ?? [];
+    const seen = new Map<number, SectionProps>();
     for (const r of ab) if (r.ISR_STRE_NR != null && !seen.has(r.ISR_STRE_NR)) seen.set(r.ISR_STRE_NR, r);
     for (const [nr, r] of seen) {
       this.entries.push({
