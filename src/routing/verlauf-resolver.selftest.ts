@@ -12,30 +12,30 @@ import type { LatLng, StationLookup } from '../types.js';
 // FF(6) --300--> HH(8) --300--> GG(7)   (einziger Weg = grosser Umweg, 2x100 km)
 const graph = new Graph();
 graph.addBidirectional(1, 2, {
-  timeMin: 10, distKm: 15, strecke: 100,
+  timeMin: 10, distKm: 15, lineNumber: 100,
   coords: [[50.0, 8.0], [50.05, 8.06], [50.1, 8.1]] as LatLng[],
 });
 // Mittelpunkt bewusst NICHT kollinear zu den Nachbarn, sonst raeumt die
 // Douglas-Peucker-Vereinfachung den Stosspunkt (BB) weg.
 graph.addBidirectional(2, 3, {
-  timeMin: 10, distKm: 15, strecke: 100,
+  timeMin: 10, distKm: 15, lineNumber: 100,
   coords: [[50.1, 8.1], [50.15, 8.11], [50.2, 8.2]] as LatLng[],
 });
 graph.addBidirectional(1, 3, {
-  timeMin: 8, distKm: 20, strecke: 200,
+  timeMin: 8, distKm: 20, lineNumber: 200,
   coords: [[50.0, 8.0], [50.2, 8.2]] as LatLng[],
 });
 graph.addBidirectional(6, 8, {
-  timeMin: 60, distKm: 100, strecke: 300,
+  timeMin: 60, distKm: 100, lineNumber: 300,
   coords: [[50.0, 8.0], [51.5, 9.5]] as LatLng[],
 });
 graph.addBidirectional(8, 7, {
-  timeMin: 60, distKm: 100, strecke: 300,
+  timeMin: 60, distKm: 100, lineNumber: 300,
   coords: [[51.5, 9.5], [50.05, 8.0]] as LatLng[],
 });
 // Kante mit ungerundeten Koordinaten fuer den Rundungs-Test.
 graph.addBidirectional(20, 21, {
-  timeMin: 1, distKm: 1, strecke: 400,
+  timeMin: 1, distKm: 1, lineNumber: 400,
   coords: [[50.123456789, 8.987654321], [50.2, 9.0]] as LatLng[],
 });
 
@@ -52,14 +52,14 @@ const stations: StationLookup = {
   const frei = graph.dijkstra(1, 3, 'short');
   assert.ok(frei, 'unbeschraenkt: Pfad vorhanden');
   assert.strictEqual(frei!.edges.length, 1, 'unbeschraenkt: direkte Kante (20 km) gewinnt');
-  assert.strictEqual(frei!.edges[0]!.strecke, 200);
+  assert.strictEqual(frei!.edges[0]!.lineNumber, 200);
 
-  const nur100 = graph.dijkstra(1, 3, 'short', (e) => e.strecke === 100);
+  const nur100 = graph.dijkstra(1, 3, 'short', (e) => e.lineNumber === 100);
   assert.ok(nur100, 'Filter 100: Pfad vorhanden');
   assert.strictEqual(nur100!.edges.length, 2, 'Filter 100: Bogen ueber BB');
   assert.deepStrictEqual(nur100!.nodesSeq, [1, 2, 3]);
 
-  const nur999 = graph.dijkstra(1, 3, 'short', (e) => e.strecke === 999);
+  const nur999 = graph.dijkstra(1, 3, 'short', (e) => e.lineNumber === 999);
   assert.strictEqual(nur999, null, 'Filter ohne passende Kanten -> null');
 }
 

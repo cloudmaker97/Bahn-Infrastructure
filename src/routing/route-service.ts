@@ -1,5 +1,6 @@
-// Berechnet Routen zwischen zwei Betriebsstellen. Verantwortung: Routing (SRP).
-// Haengt nur von Abstraktionen ab (Pathfinder, StationLookup) -> DIP, gut testbar.
+// Computes routes between two operating points. Responsibility: routing (SRP).
+// Depends only on abstractions (Pathfinder, StationLookup) -> DIP, easy to test.
+// Error strings are user-facing and intentionally German (product language).
 import type {
   Pathfinder, StationLookup, RouteMode, RouteResult, RouteError, RouteWaypoint,
 } from '../types.js';
@@ -20,7 +21,7 @@ export class RouteService {
     let totalTime = 0, totalDist = 0;
     const segments = path.edges.map((e) => {
       totalTime += e.timeMin; totalDist += e.distKm;
-      return { strecke: e.strecke, timeMin: +e.timeMin.toFixed(2), distKm: +e.distKm.toFixed(3), coords: e.coords };
+      return { line: e.lineNumber, timeMin: +e.timeMin.toFixed(2), distKm: +e.distKm.toFixed(3), coords: e.coords };
     });
     const waypoints: RouteWaypoint[] = path.nodesSeq.map((s) => {
       const info = this.stations.getStation(s);

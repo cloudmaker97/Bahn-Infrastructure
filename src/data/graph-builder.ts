@@ -36,7 +36,7 @@ export class GraphBuilder {
       graph.addBidirectional(a, b, {
         timeMin: (dist / speed) * 60,
         distKm: dist,
-        strecke: p.ISR_STRE_NR,
+        lineNumber: p.ISR_STRE_NR,
         coords,
       });
     }

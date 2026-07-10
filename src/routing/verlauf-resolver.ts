@@ -115,7 +115,7 @@ export class VerlaufResolver {
     if (strecken.length > 0) {
       const set = new Set(strecken);
       const pfad = this.pathfinder.dijkstra(start, ziel, 'short',
-        (e) => e.strecke != null && set.has(e.strecke));
+        (e) => e.lineNumber != null && set.has(e.lineNumber));
       const kette = pfad ? VerlaufResolver.kette(pfad.edges) : [];
       if (kette.length >= 2) return vereinfache(kette, VEREINFACHUNG_M);
     }

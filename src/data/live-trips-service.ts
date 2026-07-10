@@ -5,14 +5,10 @@
 import { LIVETRIPS_API, LIVETRIPS_TTL_MS } from '../config.js';
 import { ringsBbox } from '../shared/geo.js';
 import { DE_BOUNDARY_RINGS } from '../shared/de-boundary.js';
-import { normalizeTrips, type TrainDTO } from '../shared/live-trips-core.js';
+import { normalizeTrips } from '../shared/live-trips-core.js';
+import type { LiveTripsResult } from '../shared/api-types.js';
 
-/** Antwort von /api/livetrips: Zeitstempel, Züge und evtl. Fehlertext. */
-export interface LiveTripsResult {
-  generatedAt: string;
-  trains: TrainDTO[];
-  error: string | null;
-}
+export type { LiveTripsResult } from '../shared/api-types.js';
 
 /** Bounding-Box der Deutschland-Grenze – konstant, daher einmal vorberechnet. */
 const DE_BBOX = ringsBbox(DE_BOUNDARY_RINGS);
