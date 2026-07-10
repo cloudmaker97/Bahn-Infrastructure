@@ -3,7 +3,11 @@
 import { exec } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { PORT, WEB_OUT, DATA_WEB, NETWORK_STATUS_API, NETWORK_STATUS_WS, NETWORK_STATUS_TTL_MS } from './config.js';
+import {
+  PORT, WEB_OUT, DATA_WEB, DATA_REFRESH_INTERVAL_MS,
+  NETWORK_STATUS_API, NETWORK_STATUS_WS, NETWORK_STATUS_TTL_MS,
+} from './config.js';
+import { SingleFlight } from './core/ttl-cache.js';
 import { ensureData } from './ensure-data.js';
 import { scrapeAll } from './scrape.js';
 import { buildMapData } from './build-map-data.js';
@@ -82,25 +86,45 @@ process.on('SIGINT', shutdown);
 // or automatically when no TTY is present (typical inside a container).
 const HEADLESS = process.env.HEADLESS === '1' || process.env.HEADLESS === 'true' || !process.stdin.isTTY;
 
-/** Full data refresh: re-scrape raw data, rebuild web GeoJSON, reload IsrData. */
-async function refreshData(): Promise<string> {
-  await scrapeAll();
-  buildMapData();
-  data.reload();
-  alignmentResolver.clearCache(); // graph/geometries may have changed
-  networkStatus.invalidate();     // the cached GeoJSON was built on the old graph
-  const s = data.stats;
-  return `${s.objects.toLocaleString('de-DE')} Objekte · ${s.rl100.toLocaleString('de-DE')} RL100 · ${s.edges.toLocaleString('de-DE')} Kanten`;
+/**
+ * Full data refresh: re-scrape raw data, rebuild web GeoJSON, reload IsrData.
+ * Concurrent triggers (12 h schedule, TUI Ctrl+R) share one running refresh.
+ */
+const refreshFlight = new SingleFlight<'refresh', string>();
+function refreshData(): Promise<string> {
+  return refreshFlight.run('refresh', async () => {
+    await scrapeAll();
+    buildMapData();
+    data.reload();
+    alignmentResolver.clearCache(); // graph/geometries may have changed
+    networkStatus.invalidate();     // the cached GeoJSON was built on the old graph
+    const s = data.stats;
+    return `${s.objects.toLocaleString('de-DE')} Objekte · ${s.rl100.toLocaleString('de-DE')} RL100 · ${s.edges.toLocaleString('de-DE')} Kanten`;
+  });
 }
 
+let tui: TuiApp | null = null;
 if (HEADLESS) {
   console.log('Headless-Modus: interaktive TUI deaktiviert – nur HTTP-Server läuft.');
 } else {
-  const tui = new TuiApp(data.search, new TuiRenderer(data.sections), new InputHandler(), networkStatus, {
+  tui = new TuiApp(data.search, new TuiRenderer(data.sections), new InputHandler(), networkStatus, {
     getContext: () => ({ url, requestCount: httpServer.requestCount, totalObjects: data.totalObjects }),
     onOpenBrowser: () => openInBrowser(url),
     onRefreshData: refreshData,
     onQuit: shutdown,
   });
   tui.start();
+}
+
+// Scheduled refresh keeps the ISR data fresh on long-running servers. Errors
+// only produce a notice (the old data stays serving); next attempt in 12 h.
+if (DATA_REFRESH_INTERVAL_MS > 0) {
+  // console would corrupt the TUI screen – route the outcome to the active UI.
+  const notify = (msg: string): void => { if (tui) tui.notify(msg); else console.log(msg); };
+  const timer = setInterval(() => {
+    void refreshData()
+      .then((summary) => notify(`Automatischer Daten-Refresh: ${summary}`))
+      .catch((e) => notify(`Automatischer Daten-Refresh fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`));
+  }, DATA_REFRESH_INTERVAL_MS);
+  timer.unref(); // never keeps a shutting-down process alive
 }

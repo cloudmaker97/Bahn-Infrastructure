@@ -11,6 +11,7 @@ import { NearbyPicker } from '@/map/nearby';
 import { NetworkStatusLayers, type NetworkStatusPanelData } from '@/map/network-status';
 import { RailNetworkLayer } from '@/map/rail-network';
 import { RouteLayer } from '@/map/route';
+import { MapSearch } from '@/map/search';
 import { TrainsLayer } from '@/map/trains';
 
 export interface MapLayerCallbacks {
@@ -28,6 +29,7 @@ export interface MapLayerHandles {
   networkStatus: RefObject<NetworkStatusLayers | null>;
   overlays: RefObject<IsrOverlays | null>;
   route: RefObject<RouteLayer | null>;
+  search: RefObject<MapSearch | null>;
 }
 
 export function useMapLayers(callbacks: MapLayerCallbacks): MapLayerHandles {
@@ -37,6 +39,7 @@ export function useMapLayers(callbacks: MapLayerCallbacks): MapLayerHandles {
   const networkStatus = useRef<NetworkStatusLayers | null>(null);
   const overlays = useRef<IsrOverlays | null>(null);
   const route = useRef<RouteLayer | null>(null);
+  const search = useRef<MapSearch | null>(null);
 
   // The callbacks only forward into React state setters (stable); keep the
   // latest set in a ref so the one-time construction effect never goes stale.
@@ -62,6 +65,7 @@ export function useMapLayers(callbacks: MapLayerCallbacks): MapLayerHandles {
     networkStatus.current = status;
     overlays.current = isrOverlays;
     route.current = routeLayer;
+    search.current = new MapSearch(controller, rail, trainsLayer);
 
     // Redraw the closure lines once the line geometry (line index) is loaded.
     void rail.load().then(() => status.rebuildClosures());
@@ -85,8 +89,9 @@ export function useMapLayers(callbacks: MapLayerCallbacks): MapLayerHandles {
       networkStatus.current = null;
       overlays.current = null;
       route.current = null;
+      search.current = null;
     };
   }, []);
 
-  return { mapDiv, railNetwork, trains, networkStatus, overlays, route };
+  return { mapDiv, railNetwork, trains, networkStatus, overlays, route, search };
 }

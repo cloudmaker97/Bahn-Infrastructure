@@ -62,7 +62,7 @@ export class RailNetworkLayer {
   private lineIndex = new Map<string, GeoJSON.Feature[]>();
   /** STEL_ID (as string) -> attached sections (for operating-point popups). */
   private stationIndex = new Map<string, StationSection[]>();
-  private mode: ColorMode = 'electrification';
+  private mode: ColorMode = 'uniform';
 
   /**
    * @param onStatus status line in the panel: frac 0..1 = progress bar,
@@ -130,6 +130,14 @@ export class RailNetworkLayer {
     for (const f of feats) extendBounds(bounds, f.geometry);
     if (!bounds.isEmpty()) this.controller.map.fitBounds(bounds, { padding: 60 });
     return feats.length;
+  }
+
+  /** Clears the search highlight (e.g. when another result kind wins). */
+  clearHighlight(): void {
+    if (this.controller.map.getLayer(HIGHLIGHT_LAYER_ID)) {
+      // Same "highlight nothing" filter as the initial layer state.
+      this.controller.map.setFilter(HIGHLIGHT_LAYER_ID, ['==', ['get', 'ISR_STRE_NR'], -1]);
+    }
   }
 
   /** Section features per line number (input as string, e.g. "1011"). */

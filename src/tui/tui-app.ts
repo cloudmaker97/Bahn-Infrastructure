@@ -40,6 +40,12 @@ export class TuiApp {
     this.draw();
   }
 
+  /** Shows a transient status message from outside (e.g. the scheduled data refresh). */
+  notify(text: string): void {
+    this.state.notice = text;
+    this.draw();
+  }
+
   private onKey(key: string): void {
     const action = this.input.parse(key, this.state.mode);
     const s = this.state;

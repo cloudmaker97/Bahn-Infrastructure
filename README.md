@@ -20,3 +20,7 @@ dann `npm run dev:web` (Next-Dev-Server auf Port 3000, proxied `/api` und `/data
 `http://localhost:8000` – anderer Server-Port via `API_PROXY` übersteuerbar).
 Der Server ist federführend für alle Daten: Live-Züge kommen über `/api/livetrips`
 (Transitous-Proxy mit 10-s-Burst-Cache), die Betriebslage über `/api/streckeninfo`.
+Die ISR-Daten werden alle 12 Stunden automatisch neu geladen (Scrape + Rebuild +
+Hot-Reload); `DATA_REFRESH_HOURS` übersteuert das Intervall, `0` deaktiviert es.
+Die Kartensuche findet Streckennummern, RL100-Betriebsstellen und Live-Züge
+(vollständiger Name wie „ICE 577" oder reine Zugnummer).

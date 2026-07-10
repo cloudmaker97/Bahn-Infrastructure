@@ -38,6 +38,23 @@ export const CATEGORY_COLOR: Record<Exclude<TrainCategory, 'other'>, string> = {
 /** Fallback color for unknown categories. */
 export const CATEGORY_COLOR_FALLBACK = '#8894a0';
 
+/**
+ * Whether a live-train display name (e.g. "ICE 577", "RE 5") matches a search
+ * query. Two forms count as a hit: the full name (case- and space-insensitive,
+ * so "ice577" finds "ICE 577") and the bare train number, i.e. the complete
+ * digit sequence at the end of the name ("577" finds "ICE 577" but not
+ * "ICE 1577"). Deliberately no partial matches – a category query like "ICE"
+ * would otherwise hit every ICE on the map.
+ */
+export function matchesTrainQuery(name: string, query: string): boolean {
+  const normalize = (s: string): string => s.replace(/\s+/g, '').toUpperCase();
+  const n = normalize(name);
+  const q = normalize(query);
+  if (!n || !q) return false;
+  if (n === q) return true;
+  return /^\d+$/.test(q) && n.match(/(\d+)$/)?.[1] === q;
+}
+
 /** Slim train object delivered to the client (polyline stays encoded). */
 export interface TrainDTO {
   id: string;

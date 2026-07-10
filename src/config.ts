@@ -16,6 +16,14 @@ export const WEB_OUT = join(ROOT, 'web', 'out');
 export const PORT = process.env.PORT ? Number(process.env.PORT) : 0;
 export const DEFAULT_SPEED = 50; // km/h fallback for sections without a speed
 
+// Scheduled full data refresh (re-scrape + rebuild + hot reload) on long-running
+// servers. DATA_REFRESH_HOURS overrides the 12 h default; 0 (or an invalid
+// value) disables the schedule – manual refresh (TUI Ctrl+R) keeps working.
+const refreshHours = process.env.DATA_REFRESH_HOURS ? Number(process.env.DATA_REFRESH_HOURS) : 12;
+export const DATA_REFRESH_INTERVAL_MS = Number.isFinite(refreshHours) && refreshHours > 0
+  ? refreshHours * 60 * 60 * 1000
+  : 0;
+
 export const WFS_BASE = 'https://geoviewer.deutschebahn.com/geoviewer-geoserver/ows';
 
 /** strecken-info.de – source of the live network status (construction, disruptions, closures). */
