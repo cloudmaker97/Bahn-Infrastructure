@@ -15,6 +15,7 @@ import { resolveVersion } from './app-version.js';
 import { ReloadableIsrData } from './data/reloadable-isr-data.js';
 import { NetworkStatusService } from './data/network-status/service.js';
 import { LiveTripsService } from './data/live-trips-service.js';
+import { TripDetailsService } from './data/trip-details-service.js';
 import { RouteService } from './routing/route-service.js';
 import { AlignmentResolver } from './routing/alignment-resolver.js';
 import { ApiRouter } from './server/api-router.js';
@@ -57,12 +58,14 @@ const networkStatus = new NetworkStatusService(data.stations, {
   alignment: alignmentResolver.resolve,
 });
 const liveTrips = new LiveTripsService();
+const tripDetails = new TripDetailsService();
 const apiRouter = new ApiRouter({
   routes: routeService,
   suggester: data.stations,
   search: data.search,
   networkStatus,
   liveTrips,
+  tripDetails,
   sse: sseHub,
   version: resolveVersion(),
 });

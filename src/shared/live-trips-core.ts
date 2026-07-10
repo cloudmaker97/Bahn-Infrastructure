@@ -58,6 +58,8 @@ export function matchesTrainQuery(name: string, query: string): boolean {
 /** Slim train object delivered to the client (polyline stays encoded). */
 export interface TrainDTO {
   id: string;
+  /** Raw Transitous tripId ('' when unknown) – key for /api/trip (schedule). */
+  tripId: string;
   name: string;
   mode: string;
   category: TrainCategory;
@@ -121,6 +123,7 @@ export function normalizeTrips(rawArray: unknown, nowMs: number, rings: Ring[] |
 
     out.push({
       id: `${trip.tripId || raw.mode}@${departMs}`,
+      tripId: trip.tripId || '',
       name: trip.displayName || '',
       mode: raw.mode!,
       category: categoryOf(raw.mode!),

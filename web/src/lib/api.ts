@@ -2,7 +2,8 @@
 // the browser only ever talks to /api/* and /data/* (passed through to the Node
 // server via Next rewrites in dev, same origin in prod).
 import type {
-  LiveTripsResult, NetworkStatusResult, RouteMode, RouteResponse, StationSuggestion, VersionInfo,
+  LiveTripsResult, NetworkStatusResult, RouteMode, RouteResponse, StationSuggestion,
+  TripDetailsResult, VersionInfo,
 } from './types';
 
 /** GET + JSON with error check (HTTP status ≠ 2xx throws). */
@@ -19,6 +20,11 @@ export function getVersion(): Promise<VersionInfo> {
 /** Live trains; `zoom` is the Transitous zoom (MapLibre zoom + 1, integer). */
 export function getLiveTrips(zoom: number): Promise<LiveTripsResult> {
   return getJson<LiveTripsResult>(`/api/livetrips?zoom=${Math.round(zoom)}`);
+}
+
+/** Schedule of one live train (all stops with times); tripId from the TrainDTO. */
+export function getTripDetails(tripId: string): Promise<TripDetailsResult> {
+  return getJson<TripDetailsResult>(`/api/trip?tripId=${encodeURIComponent(tripId)}`);
 }
 
 /** Network status (disruptions/construction/closures); the URL is a stable contract. */
