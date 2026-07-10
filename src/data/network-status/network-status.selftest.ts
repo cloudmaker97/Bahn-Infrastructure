@@ -1,18 +1,13 @@
 // Selbsttest fuer die strecken-info-Aufbereitung.
 // 1) OFFLINE: reine Funktionen (Koordinaten, Aktiv-Filter, GeoJSON-Bau) mit Fixtures.
 // 2) LIVE-Smoke: echter Abruf (nur Logging, kein harter Assert).
-// Laufbar mit: npx tsx src/data/streckeninfo.selftest.ts
+// Laufbar mit: npx tsx src/data/network-status/network-status.selftest.ts
 import assert from 'node:assert';
-import {
-  mercatorToWgs84,
-  istAktuellAktiv,
-  baueGeoJson,
-  StreckenInfoService,
-  type StreckenInfoRohdaten,
-  type CoordResolver,
-} from './streckeninfo.js';
-import { IsrData } from './isr-data.js';
-import { AlignmentResolver } from '../routing/alignment-resolver.js';
+import { mercatorToWgs84, isCurrentlyActive, buildGeoJson } from './transform.js';
+import { NetworkStatusService } from './service.js';
+import type { CoordResolver, RawNetworkStatus } from './wire.js';
+import { IsrData } from '../isr-data.js';
+import { AlignmentResolver } from '../../routing/alignment-resolver.js';
 
 // --- 1) mercatorToWgs84 (Ulm, Toleranz 0.01 Grad) ---
 {
@@ -25,7 +20,7 @@ import { AlignmentResolver } from '../routing/alignment-resolver.js';
   assert.ok(lon < lat, 'Reihenfolge muss [lon, lat] sein');
 }
 
-// --- 2) istAktuellAktiv ---
+// --- 2) isCurrentlyActive ---
 {
   // Fenster, das JETZT abdeckt (normales Fenster innerhalb eines Tages).
   const now = new Date(2026, 6, 6, 15, 0, 0); // Montag 15:00
@@ -40,7 +35,7 @@ import { AlignmentResolver } from '../routing/alignment-resolver.js';
       },
     ],
   };
-  assert.strictEqual(istAktuellAktiv(abdeckend, now), true, 'abdeckendes Fenster -> true');
+  assert.strictEqual(isCurrentlyActive(abdeckend, now), true, 'abdeckendes Fenster -> true');
 
   // Fenster ueber Mitternacht (20:00-04:00).
   const ueberMitternacht = {
@@ -55,12 +50,12 @@ import { AlignmentResolver } from '../routing/alignment-resolver.js';
     ],
   };
   assert.strictEqual(
-    istAktuellAktiv(ueberMitternacht, new Date(2026, 6, 6, 23, 0, 0)),
+    isCurrentlyActive(ueberMitternacht, new Date(2026, 6, 6, 23, 0, 0)),
     true,
     'ueber Mitternacht um 23:00 -> true',
   );
   assert.strictEqual(
-    istAktuellAktiv(ueberMitternacht, new Date(2026, 6, 6, 12, 0, 0)),
+    isCurrentlyActive(ueberMitternacht, new Date(2026, 6, 6, 12, 0, 0)),
     false,
     'ueber Mitternacht um 12:00 -> false',
   );
@@ -71,7 +66,7 @@ import { AlignmentResolver } from '../routing/alignment-resolver.js';
     abgelaufen: true,
     geschlossen: false,
   };
-  assert.strictEqual(istAktuellAktiv(abgelaufen, now), false, 'abgelaufen -> false');
+  assert.strictEqual(isCurrentlyActive(abgelaufen, now), false, 'abgelaufen -> false');
 
   // Stoerung: now im Zeitraum -> true.
   const laufend = {
@@ -79,10 +74,10 @@ import { AlignmentResolver } from '../routing/alignment-resolver.js';
     abgelaufen: false,
     geschlossen: false,
   };
-  assert.strictEqual(istAktuellAktiv(laufend, now), true, 'now im Zeitraum -> true');
+  assert.strictEqual(isCurrentlyActive(laufend, now), true, 'now im Zeitraum -> true');
 }
 
-// --- 3) baueGeoJson mit echten (getrimmten) Response-Fixtures ---
+// --- 3) buildGeoJson mit echten (getrimmten) Response-Fixtures ---
 {
   // Stoerung (verortet, koordinaten = Linie aus 2 Punkten).
   const stoerung = {
@@ -219,13 +214,13 @@ import { AlignmentResolver } from '../routing/alignment-resolver.js';
 
   // now = Montag 2026-07-06 22:00 -> deckt Baustellen- und Streckenruhen-Fenster ab.
   const now = new Date(2026, 6, 6, 22, 0, 0);
-  const rohdaten: StreckenInfoRohdaten = {
+  const rohdaten: RawNetworkStatus = {
     stoerungen: [stoerung, sammel, stoerungAbschnitt, stoerungOhneOrt],
     baustellen: [baustelle],
     streckenruhen: [streckenruhe],
     sammelmeldungen: [sammel],
   };
-  const r = baueGeoJson(rohdaten, now, resolveCoord);
+  const r = buildGeoJson(rohdaten, now, resolveCoord);
 
   // Stoerungen: 2 verortete (koordinaten + abschnitte); Sammelmeldung + ohne-Ort NICHT dabei.
   assert.strictEqual(r.stoerungen.features.length, 2, `stoerungen: ${r.stoerungen.features.length}`);
@@ -295,7 +290,7 @@ import { AlignmentResolver } from '../routing/alignment-resolver.js';
   const now = new Date(2026, 6, 6, 12, 0, 0); // Montag 12:00, aktiv
   const zeitraum = { beginn: '2026-07-01T00:00:00', ende: '2026-12-31T23:59:59' };
   const resolve: CoordResolver = (r) => (r === 'AA' ? [9.9, 48.4] : null);
-  const roh: StreckenInfoRohdaten = {
+  const roh: RawNetworkStatus = {
     stoerungen: [
       { key: 'v', cause: 'Signalstoerung', subcause: 'x', text: 'verortet',
         zeitraum, betriebsstellen: [{ ril100: 'AA' }],
@@ -310,7 +305,7 @@ import { AlignmentResolver } from '../routing/alignment-resolver.js';
     sammelmeldungen: [],
   };
 
-  const r = baueGeoJson(roh, now, resolve);
+  const r = buildGeoJson(roh, now, resolve);
 
   assert.strictEqual(r.stoerungen.features.length, 1, 'nur verortete in features');
   assert.strictEqual(r.stoerungenListe.length, 2, 'nur Nicht-Sammelmeldungen in stoerungenListe');
@@ -387,7 +382,7 @@ import { AlignmentResolver } from '../routing/alignment-resolver.js';
     },
   };
 
-  const r = baueGeoJson(
+  const r = buildGeoJson(
     {
       stoerungen: [stoerungHinRueck, stoerungFallback],
       baustellen: [baustelleVerlauf, baustelleFallback],
@@ -412,7 +407,7 @@ import { AlignmentResolver } from '../routing/alignment-resolver.js';
     zeitraum,
     abschnitte: [{ von: { ril100: 'EEK Q' }, bis: { ril100: 'EBLB' }, streckennummer: 2871 }],
   };
-  const rBft = baueGeoJson(
+  const rBft = buildGeoJson(
     { stoerungen: [stoerungBft], baustellen: [], streckenruhen: [], sammelmeldungen: [] },
     now, resolveCoord, resolveAlignment,
   );
@@ -440,7 +435,7 @@ import { AlignmentResolver } from '../routing/alignment-resolver.js';
     ril100Von: 'EEK', ril100Bis: 'EBLB',
     koordinaten: { von: { x: 890000, y: 6600000 }, bis: { x: 890000, y: 6600000 } },
   };
-  const r2 = baueGeoJson(
+  const r2 = buildGeoJson(
     { stoerungen: [], baustellen: [punktBaustelle], streckenruhen: [], sammelmeldungen: [] },
     now, resolveCoord, resolveAlignment,
   );
@@ -471,7 +466,7 @@ import { AlignmentResolver } from '../routing/alignment-resolver.js';
       ],
       abschnitte: [{ von: { ril100: 'XAA' }, bis: { ril100: 'XBB' }, streckennummer: 1 }],
     };
-    const rk = baueGeoJson(
+    const rk = buildGeoJson(
       {
         stoerungen: [stoerungKoordUndVerlauf, stoerungKoordOhneVerlauf],
         baustellen: [], streckenruhen: [], sammelmeldungen: [],
@@ -506,7 +501,7 @@ console.log('SELFTEST OK');
     const data = new IsrData();
     const resolver = new AlignmentResolver(data.graph, data.stations);
     const t0 = Date.now();
-    const r = await new StreckenInfoService(data.stations, { alignment: resolver.resolve }).getData();
+    const r = await new NetworkStatusService(data.stations, { alignment: resolver.resolve }).getData();
     console.log(`LIVE Dauer inkl. Verlaufs-Routing: ${Date.now() - t0} ms`);
     console.log('LIVE counts:', JSON.stringify(r.counts));
     const verortet = r.counts.stoerungen;
@@ -539,7 +534,7 @@ console.log('SELFTEST OK');
 try {
   const isr = new IsrData();
   let refreshed = 0;
-  const svc = new StreckenInfoService(isr.stations, { onRefresh: () => { refreshed++; } });
+  const svc = new NetworkStatusService(isr.stations, { onRefresh: () => { refreshed++; } });
   const erst = await svc.getData();             // 1. echter Scrape (Fehler stehen im error-Feld, kein throw)
   if (erst.error) {
     console.log('[live] uebersprungen (kein Netz):', erst.error);

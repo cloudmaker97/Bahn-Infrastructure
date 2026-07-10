@@ -28,8 +28,8 @@ jobs:
       - name: Selftest – geometry (segment stitching)
         run: npx tsx src/core/geometry.selftest.ts
 
-      - name: Selftest – streckeninfo
-        run: npx tsx src/data/streckeninfo.selftest.ts
+      - name: Selftest – network status
+        run: npx tsx src/data/network-status/network-status.selftest.ts
 
       - name: Selftest – SSE-Hub
         run: npx tsx src/server/sse-hub.selftest.ts
