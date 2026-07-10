@@ -19,9 +19,11 @@ import VersionBadge from './VersionBadge';
 export default function MapApp() {
   const [colorMode, setColorMode] = useState<ColorMode>('uniform');
   // Defaults: uniform line color ("Einfarbig"), live trains ON, sub-filter
-  // "Nur Echtzeit" ON, disruptions ON, construction/closures and overlays OFF.
+  // "Nur Echtzeit" ON, "Nur Fernverkehr" OFF, disruptions ON,
+  // construction/closures and overlays OFF.
   const [liveOn, setLiveOn] = useState(true);
   const [realtimeOnly, setRealtimeOnly] = useState(true);
+  const [longDistanceOnly, setLongDistanceOnly] = useState(false);
   const [statusOn, setStatusOn] = useState<Record<NetworkStatusCategory, boolean>>({
     disruption: true, construction: false, closure: false,
   });
@@ -50,6 +52,7 @@ export default function MapApp() {
     else trains.stop();
   }, [layers, liveOn]);
   useEffect(() => { layers.trains.current?.setRealtimeOnly(realtimeOnly); }, [layers, realtimeOnly]);
+  useEffect(() => { layers.trains.current?.setLongDistanceOnly(longDistanceOnly); }, [layers, longDistanceOnly]);
   useEffect(() => {
     const si = layers.networkStatus.current;
     if (!si) return;
@@ -79,10 +82,12 @@ export default function MapApp() {
   const layerItems: LayerEntry[] = [
     { key: 'live', label: 'Live-Züge', checked: liveOn },
     { key: 'live-rt', label: 'Nur Echtzeit', checked: realtimeOnly, indent: true },
+    { key: 'live-ld', label: 'Nur Fernverkehr', checked: longDistanceOnly, indent: true },
   ];
   const toggles: Record<string, (on: boolean) => void> = {
     live: setLiveOn,
     'live-rt': setRealtimeOnly,
+    'live-ld': setLongDistanceOnly,
   };
   if (networkStatusData) {
     const statusEntries: Array<{ category: NetworkStatusCategory; label: string; count: number; indent?: boolean }> = [
