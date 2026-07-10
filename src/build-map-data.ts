@@ -8,6 +8,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { DATA_RAW, DATA_WEB, LAYERS, NOISE } from './config.js';
+import { round5 } from './core/geometry.js';
 import type { AbschnittProps, FeatureCollection, GeoFeature } from './types.js';
 
 const isNoise = (v: unknown): boolean =>
@@ -20,15 +21,13 @@ function cleanProps(p: Record<string, unknown>, whitelist?: string[]): Record<st
   return out;
 }
 
-const r5 = (n: number): number => Math.round(n * 1e5) / 1e5;
-
 function roundGeom(g: GeoFeature['geometry']): GeoFeature['geometry'] {
   if (!g) return g;
   if (g.type === 'MultiLineString') {
     g.coordinates = (g.coordinates as number[][][]).map(
-      (line) => line.map(([x, y]) => [r5(x!), r5(y!)]));
+      (line) => line.map(([x, y]) => [round5(x!), round5(y!)]));
   } else if (g.type === 'MultiPoint') {
-    g.coordinates = (g.coordinates as number[][]).map((pt) => pt.map(r5));
+    g.coordinates = (g.coordinates as number[][]).map((pt) => pt.map(round5));
   }
   return g;
 }

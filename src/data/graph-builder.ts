@@ -1,7 +1,7 @@
 // Baut aus der Web-GeoJSON der Streckenabschnitte den Routing-Graphen.
 // Verantwortung: Graphaufbau (SRP). Haengt von Abstraktionen (JsonStore) ab.
 import { Graph } from '../core/graph.js';
-import { parseGermanNumber, polylineLengthKm, verketteTeilstuecke } from '../core/geo.js';
+import { parseGermanNumber, polylineLengthKm, stitchSegments } from '../core/geometry.js';
 import { DEFAULT_SPEED } from '../config.js';
 import type { JsonStore } from './json-store.js';
 import type { AbschnittProps, FeatureCollection, LatLng } from '../types.js';
@@ -18,16 +18,16 @@ export class GraphBuilder {
       const a = p.ISR_STEL_ID_VON, b = p.ISR_STEL_ID_BIS;
       if (a == null || b == null) continue;
 
-      // Die Abschnittsgeometrie ist eine MultiLineString: ihre Teilstuecke liegen in
-      // beliebiger Reihenfolge/Orientierung vor und werden zu EINER lueckenlosen Kette
-      // verkettet – sonst entstehen grosse Sprunge (s. verketteTeilstuecke).
-      const teile: LatLng[][] = [];
+      // The section geometry is a MultiLineString: its segments come in arbitrary
+      // order/orientation and are stitched into ONE gapless chain – otherwise
+      // large jumps appear (see stitchSegments).
+      const pieces: LatLng[][] = [];
       if (f.geometry && Array.isArray(f.geometry.coordinates)) {
         for (const line of f.geometry.coordinates as number[][][]) {
-          teile.push((line as number[][]).map(([lon, lat]) => [lat!, lon!] as LatLng));
+          pieces.push((line as number[][]).map(([lon, lat]) => [lat!, lon!] as LatLng));
         }
       }
-      const coords = verketteTeilstuecke(teile);
+      const coords = stitchSegments(pieces);
       let dist = parseGermanNumber(p.ALG_LAENGE_ABSCHNITT);
       if (!isFinite(dist) || dist <= 0) dist = coords.length > 1 ? polylineLengthKm(coords) : 0.1;
       let speed = parseGermanNumber(p.BET_GESCHWINDIGKEIT);

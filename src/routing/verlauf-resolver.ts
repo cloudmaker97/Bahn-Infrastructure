@@ -2,7 +2,7 @@
 // damit Meldungen (Stoerungen/Baustellen) dem Gleis folgen statt der Luftlinie.
 // Verantwortung: Verlaufs-Aufloesung (SRP). Haengt nur von Abstraktionen ab
 // (Pathfinder, StationLookup) -> DIP, ohne Netz/Daten testbar.
-import { haversine } from '../core/geo.js';
+import { haversine, round5 } from '../core/geometry.js';
 import type { Edge, Pathfinder, StationLookup, VerlaufLookup } from '../types.js';
 
 // Umweg-Guard fuer die unbeschraenkte Suche: laeuft der kuerzeste Pfad um mehr
@@ -15,11 +15,6 @@ const UMWEG_BONUS_KM = 30;
 // Reload-Pfad, der ihn leert; realistisch sind wenige tausend Paare, der
 // Deckel ist nur das Sicherheitsnetz gegen unbegrenztes Wachstum.
 const CACHE_MAX = 5000;
-
-/** Auf ~1 m runden (5 Nachkommastellen) – haelt den GeoJSON-Payload klein. */
-function runde(x: number): number {
-  return Math.round(x * 1e5) / 1e5;
-}
 
 /** Quadrat des planaren Abstands zweier [lon,lat]-Punkte (nur fuer Vergleiche). */
 function dist2(a: [number, number], b: [number, number]): number {
@@ -147,15 +142,15 @@ export class VerlaufResolver {
   private static kette(edges: Edge[]): [number, number][] {
     const out: [number, number][] = [];
     for (let i = 0; i < edges.length; i++) {
-      const seg = edges[i]!.coords.map(([lat, lon]) => [runde(lon), runde(lat)] as [number, number]);
+      const seg = edges[i]!.coords.map(([lat, lon]) => [round5(lon), round5(lat)] as [number, number]);
       if (seg.length === 0) continue;
       if (out.length === 0) {
         // Erste Kante an der naechsten ausrichten, damit ihr Ende dort anschliesst.
         const naechste = edges[i + 1]?.coords;
         if (naechste && naechste.length > 0) {
-          const n0: [number, number] = [runde(naechste[0]![1]), runde(naechste[0]![0])];
+          const n0: [number, number] = [round5(naechste[0]![1]), round5(naechste[0]![0])];
           const nEndeRoh = naechste[naechste.length - 1]!;
-          const nEnde: [number, number] = [runde(nEndeRoh[1]), runde(nEndeRoh[0])];
+          const nEnde: [number, number] = [round5(nEndeRoh[1]), round5(nEndeRoh[0])];
           const endeNah = Math.min(dist2(seg[seg.length - 1]!, n0), dist2(seg[seg.length - 1]!, nEnde));
           const anfangNah = Math.min(dist2(seg[0]!, n0), dist2(seg[0]!, nEnde));
           if (anfangNah < endeNah) seg.reverse();

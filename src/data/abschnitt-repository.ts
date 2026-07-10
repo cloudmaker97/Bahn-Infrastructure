@@ -1,6 +1,6 @@
 // Indexiert Streckenabschnitte nach Streckennummer. Verantwortung: Abschnitts-Repository (SRP).
 // Implementiert AbschnittLookup (fuer die TUI-Detailansicht einer Strecke).
-import { parseGermanNumber } from '../core/geo.js';
+import { parseGermanNumber } from '../core/geometry.js';
 import type { JsonStore } from './json-store.js';
 import type { AbschnittProps, AbschnittLookup } from '../types.js';
 
