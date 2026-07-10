@@ -14,6 +14,7 @@ import type {
   RawLineClosure,
 } from './wire.js';
 import { buildGeoJson } from './transform.js';
+import { TtlCache } from '../../core/ttl-cache.js';
 
 export type { NetworkStatusResult, AggregateNoticeDTO, DisruptionNoticeDTO } from '../../types.js';
 
@@ -51,7 +52,8 @@ export class NetworkStatusService {
   private readonly ttlMs: number;
   private readonly onRefresh: (() => void) | null;
   private readonly alignment: AlignmentLookup | undefined;
-  private cache: { data: NetworkStatusResult; ts: number } | null = null;
+  /** Single-entry TTL cache; stale reads serve as last-known-good on errors. */
+  private readonly cache: TtlCache<'data', NetworkStatusResult>;
 
   constructor(
     private stations: StationLookup,
@@ -66,6 +68,7 @@ export class NetworkStatusService {
     this.ttlMs = opts?.ttlMs ?? 180_000;
     this.onRefresh = opts?.onRefresh ?? null;
     this.alignment = opts?.alignment;
+    this.cache = new TtlCache(this.ttlMs);
   }
 
   /**
@@ -74,7 +77,7 @@ export class NetworkStatusService {
    * and builds fresh.
    */
   invalidate(): void {
-    this.cache = null;
+    this.cache.clear();
   }
 
   /** Resolves an RL100 via the ISR operating points to [lon, lat]. */
@@ -168,9 +171,9 @@ export class NetworkStatusService {
    * returned with `error` set, otherwise an empty result with `error`.
    */
   async getData(opts?: { force?: boolean }): Promise<NetworkStatusResult> {
-    const nowMs = Date.now();
-    if (!opts?.force && this.cache && nowMs - this.cache.ts < this.ttlMs) {
-      return this.cache.data;
+    if (!opts?.force) {
+      const hit = this.cache.get('data');
+      if (hit) return hit;
     }
 
     try {
@@ -190,7 +193,7 @@ export class NetworkStatusService {
         this.alignment,
       );
       const data: NetworkStatusResult = { ...built, generatedAt: now.toISOString(), error: null };
-      this.cache = { data, ts: nowMs };
+      this.cache.set('data', data);
       try {
         if (this.onRefresh) this.onRefresh(); // only after a real scrape
       } catch {
@@ -199,7 +202,9 @@ export class NetworkStatusService {
       return data;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      if (this.cache) return { ...this.cache.data, error: msg };
+      // Last-known-good without resetting the TTL: the next call retries upstream.
+      const stale = this.cache.getStale('data');
+      if (stale) return { ...stale, error: msg };
       return NetworkStatusService.empty(msg, new Date().toISOString());
     }
   }

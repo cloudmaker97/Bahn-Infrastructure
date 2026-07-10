@@ -1,105 +1,104 @@
-// Holt Live-Zugpositionen von Transitous (map/trips) und liefert normalisierte
-// TrainDTOs für /api/livetrips. Verantwortung: Upstream-Abruf + Burst-Cache je
-// Zoom-Bucket (SRP). Die reine Normalisierung lebt in src/shared/ (DRY); fetch
-// ist injizierbar (DIP), damit der Service ohne Netz testbar bleibt.
+// Fetches live train positions from Transitous (map/trips) and returns
+// normalized TrainDTOs for /api/livetrips. Responsibility: upstream fetch +
+// burst cache per zoom bucket (SRP). The pure normalization lives in
+// src/shared/ (DRY); fetch is injectable (DIP) so the service is testable
+// without network access.
 import { LIVETRIPS_API, LIVETRIPS_TTL_MS } from '../config.js';
 import { ringsBbox } from '../shared/geo.js';
 import { DE_BOUNDARY_RINGS } from '../shared/de-boundary.js';
 import { normalizeTrips } from '../shared/live-trips-core.js';
+import { SingleFlight, TtlCache } from '../core/ttl-cache.js';
 import type { LiveTripsResult } from '../shared/api-types.js';
 
 export type { LiveTripsResult } from '../shared/api-types.js';
 
-/** Bounding-Box der Deutschland-Grenze – konstant, daher einmal vorberechnet. */
+/** Bounding box of the German boundary – constant, so computed once. */
 const DE_BBOX = ringsBbox(DE_BOUNDARY_RINGS);
 
-/** Zeitfenster der Upstream-Abfrage (map/trips verlangt startTime/endTime). */
-const ZEITFENSTER_MS = 30_000;
+/** Time window of the upstream query (map/trips requires startTime/endTime). */
+const TIME_WINDOW_MS = 30_000;
 
 /**
- * Maximaler Zoom-Bucket: Transitous lehnt die deutschlandweite Bbox ab Zoom 9 mit
- * HTTP 422 ab (Bbox zu groß für den Zoom). Zoom 8 liefert bundesweit ~2,5 MB und
- * ausreichende Polyline-Detailtiefe; höhere Client-Zooms nutzen denselben Bucket.
+ * Maximum zoom bucket: Transitous rejects the Germany-wide bbox from zoom 9 on
+ * with HTTP 422 (bbox too large for the zoom). Zoom 8 returns ~2.5 MB nationwide
+ * with sufficient polyline detail; higher client zooms use the same bucket.
  */
 const MAX_BUCKET = 8;
 const MIN_BUCKET = 3;
 
-/** Upstream-Timeout: ein hängender Transitous darf /api/livetrips nicht blockieren. */
+/** Upstream timeout: a hanging Transitous must not block /api/livetrips. */
 const FETCH_TIMEOUT_MS = 12_000;
 
 export class LiveTripsService {
   private readonly apiBase: string;
   private readonly ttlMs: number;
   private readonly fetchFn: typeof fetch;
-  /** Burst-Cache: ein Eintrag je Zoom-Bucket (Rate-Limit-Schutz). */
-  private readonly cache = new Map<number, { data: LiveTripsResult; ts: number }>();
-  /** Single-Flight: laufende Upstream-Abrufe je Bucket (parallele Anfragen teilen sich einen Call). */
-  private readonly inflight = new Map<number, Promise<LiveTripsResult>>();
+  /** Burst cache: one entry per zoom bucket (rate-limit protection). */
+  private readonly cache: TtlCache<number, LiveTripsResult>;
+  /** Single flight: concurrent requests per bucket share one upstream call. */
+  private readonly inflight = new SingleFlight<number, LiveTripsResult>();
 
   constructor(opts?: { apiBase?: string; ttlMs?: number; fetchFn?: typeof fetch }) {
     this.apiBase = opts?.apiBase ?? LIVETRIPS_API;
     this.ttlMs = opts?.ttlMs ?? LIVETRIPS_TTL_MS;
     this.fetchFn = opts?.fetchFn ?? globalThis.fetch;
+    this.cache = new TtlCache(this.ttlMs);
   }
 
-  /** Leeres Ergebnis mit optionaler Fehlermeldung (Muster wie StreckenInfoService). */
+  /** Empty result with an optional error message (pattern as in NetworkStatusService). */
   private static empty(error: string | null, generatedAt: string): LiveTripsResult {
     return { generatedAt, trains: [], error };
   }
 
-  /** Upstream-URL: immer die DE-Bbox, Zeitfenster jetzt..+30 s, Zoom = Bucket. */
+  /** Upstream URL: always the DE bbox, time window now..+30 s, zoom = bucket. */
   private buildUrl(bucket: number, nowMs: number): string {
     const params = new URLSearchParams({
       min: `${DE_BBOX.minLat},${DE_BBOX.minLon}`,
       max: `${DE_BBOX.maxLat},${DE_BBOX.maxLon}`,
       startTime: new Date(nowMs).toISOString(),
-      endTime: new Date(nowMs + ZEITFENSTER_MS).toISOString(),
+      endTime: new Date(nowMs + TIME_WINDOW_MS).toISOString(),
       zoom: String(bucket),
     });
     return `${this.apiBase}?${params.toString()}`;
   }
 
   /**
-   * Gecacht (TTL je Zoom-Bucket, Single-Flight). Wirft NIE: bei Fehler wird der (auch
-   * veraltete) Cache-Stand mit gesetztem `error` geliefert, sonst ein leeres Ergebnis
-   * mit `error`. Auch Fehler-Ergebnisse werden für die TTL gecacht (negatives Caching),
-   * damit der Burst-Schutz bei Upstream-Störungen erhalten bleibt.
+   * Cached (TTL per zoom bucket, single flight). NEVER throws: on error the
+   * (possibly stale) cached state is returned with `error` set, otherwise an
+   * empty result with `error`. Error results are cached for the TTL too
+   * (negative caching), so the burst protection survives upstream outages.
    */
   async getTrains(zoom: number): Promise<LiveTripsResult> {
-    // Zoom-Bucket [MIN..MAX] als Cache-Key; unbrauchbare Werte fallen auf 6 zurück.
+    // Zoom bucket [MIN..MAX] as the cache key; unusable values fall back to 6.
     const bucket = Math.min(MAX_BUCKET, Math.max(MIN_BUCKET, Math.round(Number.isFinite(zoom) ? zoom : 6)));
     const hit = this.cache.get(bucket);
-    if (hit && Date.now() - hit.ts < this.ttlMs) return hit.data;
+    if (hit) return hit;
 
-    // Single-Flight: läuft für diesen Bucket bereits ein Abruf, dessen Ergebnis teilen.
-    const laufend = this.inflight.get(bucket);
-    if (laufend) return laufend;
-    const abruf = this.holeUndCache(bucket).finally(() => this.inflight.delete(bucket));
-    this.inflight.set(bucket, abruf);
-    return abruf;
+    // Single flight: when a fetch for this bucket is already running, share its result.
+    return this.inflight.run(bucket, () => this.fetchAndCache(bucket));
   }
 
-  /** Führt den Upstream-Abruf aus und legt Ergebnis ODER Fehler unter aktueller ts ab. */
-  private async holeUndCache(bucket: number): Promise<LiveTripsResult> {
+  /** Performs the upstream fetch and stores the result OR the error under a fresh ts. */
+  private async fetchAndCache(bucket: number): Promise<LiveTripsResult> {
     const nowMs = Date.now();
-    const alt = this.cache.get(bucket);
+    const previous = this.cache.getStale(bucket);
     try {
       const res = await this.fetchFn(this.buildUrl(bucket, nowMs), {
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status} bei map/trips`);
       const raw = (await res.json()) as unknown;
-      // Serverseitiger DE-Filter: nur Züge, deren aktuelle Position in Deutschland liegt.
+      // Server-side DE filter: only trains whose current position is inside Germany.
       const trains = normalizeTrips(raw, nowMs, DE_BOUNDARY_RINGS);
       const data: LiveTripsResult = { generatedAt: new Date(nowMs).toISOString(), trains, error: null };
-      this.cache.set(bucket, { data, ts: nowMs });
+      this.cache.set(bucket, data);
       return data;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      const data = alt
-        ? { ...alt.data, error: msg } // letzter guter Stand, aber mit Fehlermarkierung
+      const data = previous
+        ? { ...previous, error: msg } // last good state, but flagged with the error
         : LiveTripsService.empty(msg, new Date(nowMs).toISOString());
-      this.cache.set(bucket, { data, ts: nowMs }); // negatives Caching (Burst-Schutz)
+      this.cache.set(bucket, data); // negative caching (burst protection)
       return data;
     }
   }

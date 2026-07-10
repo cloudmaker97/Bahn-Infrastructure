@@ -11,43 +11,46 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Node einrichten
+      - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
 
-      - name: Abhängigkeiten installieren (Server)
+      - name: Install dependencies (server)
         run: npm ci
 
-      - name: Typecheck (Server)
+      - name: Typecheck (server)
         run: npm run typecheck
 
-      # Selftests laufen ohne Netz/ISR-Daten: die reinen Offline-Asserts greifen,
-      # die Live-Smoke-Blöcke loggen/überspringen sich sauber (kein harter Assert).
+      # Selftests run without network/ISR data: the pure offline asserts apply,
+      # the live-smoke blocks log/skip themselves cleanly (no hard asserts).
       - name: Selftest – geometry (segment stitching)
         run: npx tsx src/core/geometry.selftest.ts
+
+      - name: Selftest – ttl-cache
+        run: npx tsx src/core/ttl-cache.selftest.ts
 
       - name: Selftest – network status
         run: npx tsx src/data/network-status/network-status.selftest.ts
 
-      - name: Selftest – SSE-Hub
+      - name: Selftest – SSE hub
         run: npx tsx src/server/sse-hub.selftest.ts
 
       - name: Selftest – TUI
         run: npx tsx src/tui/tui.selftest.ts
 
-      - name: Selftest – Live-Züge (Service + Kernlogik)
+      - name: Selftest – live trips (service + core logic)
         run: npx tsx src/data/live-trips.selftest.ts
 
       - name: Selftest – alignment resolver
         run: npx tsx src/routing/alignment-resolver.selftest.ts
 
-      - name: Abhängigkeiten installieren (Web)
+      - name: Install dependencies (web)
         run: npm --prefix web ci
 
-      - name: Typecheck (Web)
+      - name: Typecheck (web)
         run: npm --prefix web run typecheck
 
-      - name: Build (Web, statischer Export)
+      - name: Build (web, static export)
         run: npm --prefix web run build
