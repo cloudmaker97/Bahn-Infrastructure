@@ -69,13 +69,14 @@ function scheduleRowHtml(s: TripStopDTO, nowMs: number): string {
     `><td class="k" style="white-space:nowrap">${timeCell}</td><td>${nameCell}</td></tr>`;
 }
 
-/** Schedule section of the train popup (caption + scrollable stop table). */
+/** Schedule section of the train popup (caption + stop table). No scroll
+ *  container of its own: the popup content already scrolls (max-height in
+ *  globals.css) and nested scrollbars are bad UX. */
 function scheduleHtml(trip: TripDetailsResult): string {
   const nowMs = Date.now();
   const caption = `Fahrplan${trip.headsign ? ` → ${escapeHtml(trip.headsign)}` : ''} (${trip.stops.length} Halte)`;
   const rows = trip.stops.map((s) => scheduleRowHtml(s, nowMs)).join('');
-  return `<div style="${CAPTION_STYLE}">${caption}</div>` +
-    `<div style="max-height:200px;overflow:auto"><table>${rows}</table></div>`;
+  return `<div style="${CAPTION_STYLE}">${caption}</div><table>${rows}</table>`;
 }
 
 /** One loaded train: DTO plus the precomputed track for the interpolation. */

@@ -31,10 +31,12 @@ function stationPopupHtml(p: Record<string, unknown>, railNetwork: RailNetworkLa
   const rows = list.map((a) =>
     `<tr><td class="k">${escapeHtml(a.lineNumber)}</td><td>${escapeHtml(a.fromTo)}</td>` +
     `<td>${escapeHtml(a.kmFrom)} → ${escapeHtml(a.kmTo)}</td></tr>`).join('');
+  // No scroll container of its own: the popup content already scrolls
+  // (max-height in globals.css) and nested scrollbars are bad UX.
   return base +
     `<div style="margin-top:8px;font-size:11px;color:var(--muted);text-transform:uppercase;` +
     `letter-spacing:.04em;font-weight:600">Zugehörige Strecken/Abschnitte (${list.length})</div>` +
-    `<div style="max-height:180px;overflow:auto"><table>${rows}</table></div>`;
+    `<table>${rows}</table>`;
 }
 
 /** Description of one overlay (file, look, popup, nearby info). */
