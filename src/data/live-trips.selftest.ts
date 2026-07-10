@@ -80,9 +80,9 @@ function nahe(ist: number, soll: number, tol: number, msg: string): void {
 // --- c) isRailMode/categoryOf ---
 {
   assert.strictEqual(isRailMode('HIGHSPEED_RAIL'), true, 'HIGHSPEED_RAIL ist Eisenbahn');
-  assert.strictEqual(categoryOf('HIGHSPEED_RAIL'), 'fern', 'HIGHSPEED_RAIL -> fern');
+  assert.strictEqual(categoryOf('HIGHSPEED_RAIL'), 'long-distance', 'HIGHSPEED_RAIL -> long-distance');
   assert.strictEqual(isRailMode('SUBURBAN'), true, 'SUBURBAN ist Eisenbahn');
-  assert.strictEqual(categoryOf('SUBURBAN'), 'sbahn', 'SUBURBAN -> sbahn');
+  assert.strictEqual(categoryOf('SUBURBAN'), 'suburban', 'SUBURBAN -> suburban');
   assert.strictEqual(isRailMode('BUS'), false, 'BUS ist keine Eisenbahn');
 }
 
@@ -121,7 +121,7 @@ function nahe(ist: number, soll: number, tol: number, msg: string): void {
   assert.strictEqual(trains.length, 1, `normalizeTrips: ${trains.length} statt 1`);
   const t = trains[0]!;
   assert.strictEqual(t.name, 'ICE 123', 'Anzeigename aus trips[0]');
-  assert.strictEqual(t.category, 'fern', 'Kategorie fern');
+  assert.strictEqual(t.category, 'long-distance', 'category long-distance');
   assert.strictEqual(t.delayMin, 3, `delayMin: ${t.delayMin}`);
   assert.strictEqual(t.realTime, true, 'realTime übernommen');
   assert.strictEqual(t.polyline, polyDe, 'Polyline bleibt kodiert');

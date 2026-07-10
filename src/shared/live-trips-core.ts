@@ -1,10 +1,10 @@
-// Reine Kernlogik der Live-Züge: Modus-Filter, Kategorien und Normalisierung der
-// Transitous-map/trips-Segmente zu schlanken TrainDTOs (Server ist federführend;
-// der Client erhält nur noch diese DTOs über /api/livetrips).
+// Pure core logic for live trains: mode filter, categories, and normalization of
+// Transitous map/trips segments into slim TrainDTOs (the server is authoritative;
+// the client only ever receives these DTOs via /api/livetrips).
 import { decodePolyline } from './polyline.js';
 import { buildTrack, pointInBoundary, positionAt, type Ring } from './geo.js';
 
-/** Eisenbahn-Modi (alles andere – Bus, U-Bahn, Tram, Fähre – wird verworfen). */
+/** Railway modes (everything else – bus, subway, tram, ferry – is discarded). */
 export const RAIL_MODES = new Set([
   'HIGHSPEED_RAIL',
   'LONG_DISTANCE',
@@ -18,27 +18,27 @@ export function isRailMode(mode: unknown): boolean {
   return typeof mode === 'string' && RAIL_MODES.has(mode);
 }
 
-export type TrainCategory = 'fern' | 'regio' | 'sbahn' | 'other';
+export type TrainCategory = 'long-distance' | 'regional' | 'suburban' | 'other';
 
-/** Grobkategorie für die Farbwahl. */
+/** Coarse category used for color selection. */
 export function categoryOf(mode: string): TrainCategory {
-  if (mode === 'HIGHSPEED_RAIL' || mode === 'LONG_DISTANCE' || mode === 'NIGHT_RAIL') return 'fern';
-  if (mode === 'REGIONAL_RAIL' || mode === 'REGIONAL_FAST_RAIL') return 'regio';
-  if (mode === 'SUBURBAN') return 'sbahn';
+  if (mode === 'HIGHSPEED_RAIL' || mode === 'LONG_DISTANCE' || mode === 'NIGHT_RAIL') return 'long-distance';
+  if (mode === 'REGIONAL_RAIL' || mode === 'REGIONAL_FAST_RAIL') return 'regional';
+  if (mode === 'SUBURBAN') return 'suburban';
   return 'other';
 }
 
-/** Kategorie-Farben, abgesetzt von den Infrastruktur-Overlays. */
+/** Category colors, distinct from the infrastructure overlays. */
 export const CATEGORY_COLOR: Record<Exclude<TrainCategory, 'other'>, string> = {
-  fern: '#d23f3f',
-  regio: '#2ec76b',
-  sbahn: '#2f7fe0',
+  'long-distance': '#d23f3f',
+  regional: '#2ec76b',
+  suburban: '#2f7fe0',
 };
 
-/** Fallback-Farbe für unbekannte Kategorien. */
+/** Fallback color for unknown categories. */
 export const CATEGORY_COLOR_FALLBACK = '#8894a0';
 
-/** Schlankes, an den Client ausgeliefertes Zug-Objekt (Polyline bleibt kodiert). */
+/** Slim train object delivered to the client (polyline stays encoded). */
 export interface TrainDTO {
   id: string;
   name: string;
@@ -55,7 +55,7 @@ export interface TrainDTO {
   toName: string;
 }
 
-/** Schmale Sicht auf ein rohes map/trips-Segment (nur benutzte Felder). */
+/** Narrow view of a raw map/trips segment (only the fields we use). */
 interface RawSegment {
   mode?: string;
   departure?: string;
@@ -70,12 +70,12 @@ interface RawSegment {
 }
 
 /**
- * Wandelt die Roh-Segmente von map/trips in TrainDTOs.
- * Verwirft Nicht-Eisenbahn, ungültige Zeiten und undekodierbare Polylinien.
- * @param rawArray Roh-Antwort von map/trips
- * @param nowMs aktueller Zeitpunkt (ms) – bestimmt die Zugposition für den Grenzfilter
- * @param rings optionale Landesgrenze (äußere Ringe); wenn gesetzt, werden nur Züge
- *        behalten, deren AKTUELLE Position innerhalb der Grenze liegt.
+ * Converts raw map/trips segments into TrainDTOs.
+ * Discards non-railway modes, invalid times, and undecodable polylines.
+ * @param rawArray raw response from map/trips
+ * @param nowMs current time (ms) – determines the train position for the boundary filter
+ * @param rings optional national boundary (outer rings); when set, only trains
+ *        whose CURRENT position lies inside the boundary are kept.
  */
 export function normalizeTrips(rawArray: unknown, nowMs: number, rings: Ring[] | null = null): TrainDTO[] {
   const out: TrainDTO[] = [];
@@ -89,7 +89,7 @@ export function normalizeTrips(rawArray: unknown, nowMs: number, rings: Ring[] |
     const coords = decodePolyline(raw.polyline);
     if (coords.length < 2) continue;
 
-    // Nur Züge, deren AKTUELLE Position innerhalb der Grenze liegt (Punkte sind [lat, lon]).
+    // Only trains whose CURRENT position lies inside the boundary (points are [lat, lon]).
     if (rings && rings.length) {
       const span = arriveMs - departMs;
       const frac = span > 0 ? (nowMs - departMs) / span : 0;

@@ -1,13 +1,13 @@
-// Google-Encoded-Polyline-Dekodierung (Transitous: Präzision 5).
-// Reine Funktion, von Server (Normalisierung/DE-Filter) und Web (Track-Aufbau) genutzt.
+// Google encoded-polyline decoding (Transitous: precision 5).
+// Pure function, used by the server (normalization/DE filter) and web (track building).
 
-/** Ein Punkt als [lat, lon]. */
+/** A point as [lat, lon]. */
 export type LatLon = [number, number];
 
 /**
- * Dekodiert eine Google-Encoded-Polyline zu [[lat, lon], …].
- * @param str kodierte Polyline
- * @param precision Nachkommastellen-Faktor (Transitous: 5)
+ * Decodes a Google encoded polyline into [[lat, lon], …].
+ * @param str encoded polyline
+ * @param precision decimal-place factor (Transitous: 5)
  */
 export function decodePolyline(str: string, precision = 5): LatLon[] {
   let idx = 0;

@@ -1,5 +1,5 @@
-// Deutschland-Landesgrenze: aeussere Ringe ([lon, lat]) fuer den Point-in-Polygon-Filter.
-// GENERIERT aus deutschlandGeoJSON (isellsoap, Aufloesung: niedrig) - nicht von Hand editieren.
+// German national boundary: outer rings ([lon, lat]) for the point-in-polygon filter.
+// GENERATED from deutschlandGeoJSON (isellsoap, resolution: low) - do not edit by hand.
 import type { Ring } from './geo.js';
 
 export const DE_BOUNDARY_RINGS: Ring[] = [
