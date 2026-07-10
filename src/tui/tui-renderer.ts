@@ -1,12 +1,13 @@
-// Erzeugt aus dem TUI-Zustand den Bildschirm-Frame (String). Verantwortung: Rendering (SRP).
-// Keine Seiteneffekte, keine IO -> gut testbar. Fuer Strecken wird die Abschnittsliste angezeigt.
-import { ESC, bold, dim, inv, c, pad, stripAnsi, wrap, KIND_COLOR } from './ansi.js';
+// Produces the screen frame (string) from the TUI state. Responsibility: rendering (SRP).
+// No side effects, no IO -> easy to test. Lines show their section list.
+// All rendered text is user-facing and intentionally German (product language).
+import { ESC, bold, dim, inv, c, pad, stripAnsi, wrap, KIND_COLOR, KIND_LABEL } from './ansi.js';
 import type { SectionLookup, SectionProps, SearchEntry } from '../types.js';
 import type { NetworkStatusResult } from '../types.js';
 
-export type TuiMode = 'list' | 'detail' | 'meldungen';
+export type TuiMode = 'list' | 'detail' | 'notices';
 
-export interface MeldungenView {
+export interface NoticesView {
   status: 'idle' | 'loading' | 'refreshing' | 'ready';
   data: NetworkStatusResult | null;
 }
@@ -17,15 +18,15 @@ export interface TuiState {
   sel: number;
   mode: TuiMode;
   detailScroll: number;
-  filter: SearchEntry['kind'] | null; // null = ALLE
-  meldungen: MeldungenView;
-  meldungenScroll: number;
-  notice: string | null; // transiente Statusmeldung (Browser geoeffnet, Daten-Refresh …)
+  filter: SearchEntry['kind'] | null; // null = ALL
+  notices: NoticesView;
+  noticesScroll: number;
+  notice: string | null; // transient status message (browser opened, data refresh, …)
 }
 
-/** Zyklus der Filter fuer Tab/Shift+Tab: ALLE (null) + alle Ergebnistypen. */
+/** Cycle of the filters for Tab/Shift+Tab: ALL (null) + every result kind. */
 export const FILTER_CYCLE: (SearchEntry['kind'] | null)[] =
-  [null, 'Betriebsstelle', 'Strecke', 'Tunnel', 'Brücke', 'Bahnübergang'];
+  [null, 'station', 'line', 'tunnel', 'bridge', 'level-crossing'];
 
 export interface TuiContext {
   url: string;
@@ -52,13 +53,13 @@ export class TuiRenderer {
     lines.push('');
 
     if (state.mode === 'detail') this.renderDetail(state, W, H, lines);
-    else if (state.mode === 'meldungen') this.renderMeldungen(state, W, H, lines);
+    else if (state.mode === 'notices') this.renderNotices(state, W, H, lines);
     else this.renderList(state, W, H, lines);
 
     while (lines.length < H - 1) lines.push('');
     const footer = state.mode === 'detail'
       ? '↑↓ scrollen   ·   Esc/Enter: zurück   ·   Ctrl+C: beenden'
-      : state.mode === 'meldungen'
+      : state.mode === 'notices'
       ? '↑↓ scrollen   ·   r: aktualisieren   ·   Esc/q: zurück   ·   Ctrl+C: beenden'
       : '↑↓ wählen   ·   Enter: Details   ·   Ctrl+B: Meldungen   ·   Tab: filtern   ·   Ctrl+O: Browser   ·   Ctrl+R: Daten neu   ·   Ctrl+C: beenden';
     lines[H - 1] = dim(' ' + footer);
@@ -69,7 +70,7 @@ export class TuiRenderer {
     return buf;
   }
 
-  /** Filter-Leiste: aktiver Ergebnistyp invertiert, uebrige gedimmt/koloriert. */
+  /** Filter bar: the active result kind inverted, the rest dimmed/colored. */
   private filterBar(active: SearchEntry['kind'] | null): string {
     const chip = (label: string, filter: SearchEntry['kind'] | null): string => {
       const isActive = filter === active;
@@ -77,7 +78,7 @@ export class TuiRenderer {
       if (isActive) return inv(text);
       return filter ? c(KIND_COLOR[filter], text) : dim(text);
     };
-    const chips = FILTER_CYCLE.map((f) => chip(f ?? 'ALLE', f));
+    const chips = FILTER_CYCLE.map((f) => chip(f ? KIND_LABEL[f] : 'ALLE', f));
     return ` ${dim('Filter:')}${chips.join(dim('·'))}`;
   }
 
@@ -94,7 +95,7 @@ export class TuiRenderer {
     const from = Math.max(0, start);
     state.results.slice(from, from + rowsAvail).forEach((e, i) => {
       const idx = from + i;
-      const row = ` ${pad(c(KIND_COLOR[e.kind], `[${e.kind}]`), 16)} ${bold(pad(e.code, 8))} `
+      const row = ` ${pad(c(KIND_COLOR[e.kind], `[${KIND_LABEL[e.kind]}]`), 16)} ${bold(pad(e.code, 8))} `
         + `${pad(e.name, Math.max(10, W - 60))} ${dim(e.detail)}`;
       lines.push(idx === state.sel ? inv(' ' + stripAnsi(row).slice(1)) : row);
     });
@@ -103,23 +104,23 @@ export class TuiRenderer {
   private renderDetail(state: TuiState, W: number, H: number, lines: string[]): void {
     const e = state.results[state.sel];
     if (!e) { lines.push(dim(' (kein Eintrag)')); return; }
-    lines.push(` ${c(KIND_COLOR[e.kind], '[' + e.kind + ']')} ${bold(e.code)} — ${bold(e.name)}`);
+    lines.push(` ${c(KIND_COLOR[e.kind], '[' + KIND_LABEL[e.kind] + ']')} ${bold(e.code)} — ${bold(e.name)}`);
     lines.push(dim('─'.repeat(W)));
 
-    const body = e.kind === 'Strecke' ? this.streckenBody(e, W)
-      : e.kind === 'Betriebsstelle' ? this.betriebsstelleBody(e, W)
+    const body = e.kind === 'line' ? this.lineBody(e, W)
+      : e.kind === 'station' ? this.stationBody(e, W)
       : this.fieldBody(e, W);
 
     this.pushScrollWindow(body, state.detailScroll, H, lines);
   }
 
-  /** Betriebslage-Ansicht: Stoerungen + Sammelmeldungen, scrollbar. */
-  private renderMeldungen(state: TuiState, W: number, H: number, lines: string[]): void {
-    const mv = state.meldungen;
+  /** Network-status view: disruptions + aggregate notices, scrollable. */
+  private renderNotices(state: TuiState, W: number, H: number, lines: string[]): void {
+    const nv = state.notices;
     lines.push(bold(c('31', ' Betriebslage — Meldungen')));
-    if (mv.status === 'loading') { lines.push(''); lines.push(dim(' Lade Meldungen …')); return; }
-    if (mv.status === 'refreshing') lines.push(dim(' Aktualisiere …'));
-    const data = mv.data;
+    if (nv.status === 'loading') { lines.push(''); lines.push(dim(' Lade Meldungen …')); return; }
+    if (nv.status === 'refreshing') lines.push(dim(' Aktualisiere …'));
+    const data = nv.data;
     if (!data) { lines.push(''); lines.push(dim(' Keine Daten.')); return; }
     if (data.error) lines.push(c('31', ' Fehler: ' + data.error));
     lines.push(dim(' Stand: ' + data.generatedAt));
@@ -133,20 +134,20 @@ export class TuiRenderer {
     }
     if (disruptions.length > 0) {
       body.push(bold(` Störungen (${disruptions.length})`));
-      for (const m of disruptions) this.meldungBlock(body, m.cause, m.subcause, m.text,
+      for (const m of disruptions) this.noticeBlock(body, m.cause, m.subcause, m.text,
         m.start, m.end, m.transportModes, m.trackRestriction, m.located ? '' : 'ohne Ort', W);
     }
     if (aggregates.length > 0) {
       if (disruptions.length > 0) body.push('');
       body.push(bold(` Sammelmeldungen (${aggregates.length})`));
-      for (const m of aggregates) this.meldungBlock(body, m.cause, m.subcause, m.text,
+      for (const m of aggregates) this.noticeBlock(body, m.cause, m.subcause, m.text,
         m.start, m.end, m.transportModes, '', '', W);
     }
 
-    this.pushScrollWindow(body, state.meldungenScroll, H, lines);
+    this.pushScrollWindow(body, state.noticesScroll, H, lines);
   }
 
-  /** Schiebt das sichtbare Fenster von `body` (per `scroll`) in `lines` und haengt die Positionsanzeige an. */
+  /** Pushes the visible window of `body` (via `scroll`) into `lines` and appends the position line. */
   private pushScrollWindow(body: string[], scroll: number, H: number, lines: string[]): void {
     const avail = H - lines.length - 2;
     const maxScroll = Math.max(0, body.length - avail);
@@ -159,7 +160,7 @@ export class TuiRenderer {
   }
 
   /** One notice block: title line + wrapped text + meta line. */
-  private meldungBlock(
+  private noticeBlock(
     body: string[], cause: string, subcause: string, text: string,
     start: string, end: string, transportModes: string[],
     trackRestriction: string, marker: string, W: number,
@@ -178,8 +179,8 @@ export class TuiRenderer {
     if (meta.length) body.push('   ' + dim(meta.join('   ·   ')));
   }
 
-  /** Body fuer eine Strecke: Kurzinfo + scrollbare Abschnittsliste. */
-  private streckenBody(e: SearchEntry, W: number): string[] {
+  /** Body for a line: short info + scrollable section list. */
+  private lineBody(e: SearchEntry, W: number): string[] {
     const nr = Number(e.code);
     const list = this.sections.byLineNumber(nr);
     const body: string[] = [];
@@ -189,23 +190,23 @@ export class TuiRenderer {
     body.push(` ${c('90', pad('Abschnitte', 14))}  ${list.length}`);
     body.push('');
     body.push(bold(` Abschnitte (${list.length}):`));
-    // Spaltenkopf
+    // Column header
     body.push(dim(` ${pad('km von → bis', 22)} ${pad('von – bis', W - 58)} ${pad('Länge', 8)} ${pad('V', 5)} Gleis`));
-    for (const a of list) body.push(this.abschnittRow(a, W));
+    for (const a of list) body.push(this.sectionRow(a, W));
     return body;
   }
 
-  private abschnittRow(a: SectionProps, W: number): string {
+  private sectionRow(a: SectionProps, W: number): string {
     const km = `${a.ISR_KM_VON ?? '?'} → ${a.ISR_KM_BIS ?? '?'}`;
-    const vonBis = String(a.ISR_STRECKE_VON_BIS ?? '');
-    const laenge = String(a.ALG_LAENGE_ABSCHNITT ?? '').trim();
+    const fromTo = String(a.ISR_STRECKE_VON_BIS ?? '');
+    const length = String(a.ALG_LAENGE_ABSCHNITT ?? '').trim();
     const v = String(a.BET_GESCHWINDIGKEIT ?? '').trim();
-    const gleis = String(a.INF_GLEISANZAHL ?? '');
-    return ` ${pad(km, 22)} ${pad(vonBis, W - 58)} ${pad(laenge + ' km', 8)} ${pad(v, 5)} ${dim(gleis)}`;
+    const tracks = String(a.INF_GLEISANZAHL ?? '');
+    return ` ${pad(km, 22)} ${pad(fromTo, W - 58)} ${pad(length + ' km', 8)} ${pad(v, 5)} ${dim(tracks)}`;
   }
 
-  /** Body fuer eine Betriebsstelle: Basisfelder + zugehoerige Strecken/Abschnitte. */
-  private betriebsstelleBody(e: SearchEntry, W: number): string[] {
+  /** Body for an operating point: base fields + attached lines/sections. */
+  private stationBody(e: SearchEntry, W: number): string[] {
     const body = this.fieldBody(e, W);
     const stel = Number(e.data['stel']);
     const list = Number.isFinite(stel) ? this.sections.byStation(stel) : [];
@@ -215,14 +216,14 @@ export class TuiRenderer {
     body.push(dim(` ${pad('Strecke', 9)} ${pad('von – bis', W - 40)} ${pad('km von → bis', 24)}`));
     for (const a of list) {
       const nr = String(a.ISR_STRE_NR ?? '?');
-      const vonBis = String(a.ISR_STRECKE_VON_BIS ?? '');
+      const fromTo = String(a.ISR_STRECKE_VON_BIS ?? '');
       const km = `${a.ISR_KM_VON ?? '?'} → ${a.ISR_KM_BIS ?? '?'}`;
-      body.push(` ${pad(c(KIND_COLOR['Strecke'], nr), 9)} ${pad(vonBis, W - 40)} ${dim(pad(km, 24))}`);
+      body.push(` ${pad(c(KIND_COLOR['line'], nr), 9)} ${pad(fromTo, W - 40)} ${dim(pad(km, 24))}`);
     }
     return body;
   }
 
-  /** Body fuer alle anderen Entitaeten: alle nicht-leeren Felder. */
+  /** Body for every other entity: all non-empty fields. */
   private fieldBody(e: SearchEntry, W: number): string[] {
     const entries = Object.entries(e.data).filter(([, v]) => v != null && v !== '' && v !== '-');
     const keyW = Math.min(28, Math.max(4, ...entries.map(([k]) => k.length)));

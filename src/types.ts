@@ -86,9 +86,12 @@ export interface SectionLookup {
   byStation(stel: number): SectionProps[];
 }
 
+/** Result kind of a searchable entry (German display labels: tui/ansi KIND_LABEL). */
+export type SearchEntryKind = 'station' | 'line' | 'tunnel' | 'bridge' | 'level-crossing';
+
 /** A searchable entry for the TUI / search API. */
 export interface SearchEntry {
-  kind: 'Betriebsstelle' | 'Strecke' | 'Tunnel' | 'Brücke' | 'Bahnübergang';
+  kind: SearchEntryKind;
   code: string; // RL100 / line number / short name
   name: string;
   detail: string; // extra info for display
@@ -96,6 +99,6 @@ export interface SearchEntry {
 }
 
 /** Only the view of the network status that the TUI needs (DIP/ISP). */
-export interface MeldungenProvider {
+export interface NoticesProvider {
   getData(opts?: { force?: boolean }): Promise<NetworkStatusResult>;
 }

@@ -1,47 +1,47 @@
-// Selbsttest fuer TUI-Bausteine (ansi.wrap, InputHandler, Renderer).
-// Laufbar mit: npx tsx src/tui/tui.selftest.ts
+// Selftest for the TUI building blocks (ansi.wrap, InputHandler, renderer).
+// Run with: npx tsx src/tui/tui.selftest.ts
 import assert from 'node:assert';
 import { wrap } from './ansi.js';
 import { InputHandler } from './input-handler.js';
-import { TuiRenderer, type TuiState, type MeldungenView } from './tui-renderer.js';
+import { TuiRenderer, type TuiState, type NoticesView } from './tui-renderer.js';
 import { stripAnsi } from './ansi.js';
 import type { SectionLookup } from '../types.js';
 
 // --- ansi.wrap ---
 {
-  assert.deepStrictEqual(wrap('', 10), [''], 'leerer Text -> eine leere Zeile');
-  assert.deepStrictEqual(wrap('abc', 10), ['abc'], 'kurz -> eine Zeile');
+  assert.deepStrictEqual(wrap('', 10), [''], 'empty text -> one empty line');
+  assert.deepStrictEqual(wrap('abc', 10), ['abc'], 'short -> one line');
   const r = wrap('aaa bbb ccc ddd', 7);
-  assert.ok(r.every((l) => l.length <= 7), 'jede Zeile <= Breite');
-  assert.strictEqual(r.join(' '), 'aaa bbb ccc ddd', 'Worte bleiben erhalten');
-  // ueberlanges Einzelwort wird hart geschnitten
-  assert.ok(wrap('abcdefghij', 4).every((l) => l.length <= 4), 'langes Wort hart umbrochen');
+  assert.ok(r.every((l) => l.length <= 7), 'every line <= width');
+  assert.strictEqual(r.join(' '), 'aaa bbb ccc ddd', 'words are preserved');
+  // An overlong single word is cut hard.
+  assert.ok(wrap('abcdefghij', 4).every((l) => l.length <= 4), 'long word wrapped hard');
 }
 
 // --- InputHandler ---
 {
   const h = new InputHandler();
-  assert.deepStrictEqual(h.parse('\x02', 'list'), { type: 'meldungen-open' }, 'Ctrl+B oeffnet Meldungen');
-  assert.deepStrictEqual(h.parse('a', 'list'), { type: 'char', ch: 'a' }, 'Buchstabe -> char in Liste');
-  assert.deepStrictEqual(h.parse('r', 'meldungen'), { type: 'refresh' }, 'r -> refresh in Meldungen');
-  assert.deepStrictEqual(h.parse('\x1b[A', 'meldungen'), { type: 'up' }, 'Pfeil hoch scrollt Meldungen');
-  assert.deepStrictEqual(h.parse('\x1b', 'meldungen'), { type: 'back' }, 'Esc -> zurueck aus Meldungen');
-  assert.deepStrictEqual(h.parse('q', 'meldungen'), { type: 'back' }, 'q -> zurueck aus Meldungen');
-  assert.deepStrictEqual(h.parse('\r', 'meldungen'), { type: 'back' }, 'Enter -> zurueck aus Meldungen');
-  assert.deepStrictEqual(h.parse('\x03', 'list'), { type: 'quit' }, 'Ctrl+C beendet');
-  // Detailmodus unveraendert
-  assert.deepStrictEqual(h.parse('\x1b', 'detail'), { type: 'back' }, 'Esc -> zurueck aus Detail');
-  // Modus-Abweisung: Ctrl+B tut in Meldungen nichts, 'r' ist in der Liste nur ein Suchzeichen.
-  assert.deepStrictEqual(h.parse('\x02', 'meldungen'), { type: 'none' }, 'Ctrl+B ohne Wirkung in Meldungen');
-  assert.deepStrictEqual(h.parse('r', 'list'), { type: 'char', ch: 'r' }, 'r ist Suchzeichen in Liste');
-  // Globale Shortcuts (jeder Modus): Ctrl+O Browser, Ctrl+R Daten-Refresh
-  assert.deepStrictEqual(h.parse('\x0f', 'list'), { type: 'open-browser' }, 'Ctrl+O -> Browser oeffnen');
-  assert.deepStrictEqual(h.parse('\x12', 'list'), { type: 'refresh-data' }, 'Ctrl+R -> Daten-Refresh');
-  assert.deepStrictEqual(h.parse('\x0f', 'meldungen'), { type: 'open-browser' }, 'Ctrl+O auch in Meldungen');
-  assert.deepStrictEqual(h.parse('\x12', 'detail'), { type: 'refresh-data' }, 'Ctrl+R auch in Detail');
+  assert.deepStrictEqual(h.parse('\x02', 'list'), { type: 'notices-open' }, 'Ctrl+B opens the notices');
+  assert.deepStrictEqual(h.parse('a', 'list'), { type: 'char', ch: 'a' }, 'letter -> char in the list');
+  assert.deepStrictEqual(h.parse('r', 'notices'), { type: 'refresh' }, 'r -> refresh in the notices');
+  assert.deepStrictEqual(h.parse('\x1b[A', 'notices'), { type: 'up' }, 'arrow up scrolls the notices');
+  assert.deepStrictEqual(h.parse('\x1b', 'notices'), { type: 'back' }, 'Esc -> back from the notices');
+  assert.deepStrictEqual(h.parse('q', 'notices'), { type: 'back' }, 'q -> back from the notices');
+  assert.deepStrictEqual(h.parse('\r', 'notices'), { type: 'back' }, 'Enter -> back from the notices');
+  assert.deepStrictEqual(h.parse('\x03', 'list'), { type: 'quit' }, 'Ctrl+C quits');
+  // Detail mode unchanged.
+  assert.deepStrictEqual(h.parse('\x1b', 'detail'), { type: 'back' }, 'Esc -> back from detail');
+  // Mode rejection: Ctrl+B does nothing in the notices, 'r' is just a search character in the list.
+  assert.deepStrictEqual(h.parse('\x02', 'notices'), { type: 'none' }, 'Ctrl+B has no effect in the notices');
+  assert.deepStrictEqual(h.parse('r', 'list'), { type: 'char', ch: 'r' }, 'r is a search character in the list');
+  // Global shortcuts (every mode): Ctrl+O browser, Ctrl+R data refresh.
+  assert.deepStrictEqual(h.parse('\x0f', 'list'), { type: 'open-browser' }, 'Ctrl+O -> open browser');
+  assert.deepStrictEqual(h.parse('\x12', 'list'), { type: 'refresh-data' }, 'Ctrl+R -> data refresh');
+  assert.deepStrictEqual(h.parse('\x0f', 'notices'), { type: 'open-browser' }, 'Ctrl+O also in the notices');
+  assert.deepStrictEqual(h.parse('\x12', 'detail'), { type: 'refresh-data' }, 'Ctrl+R also in detail');
 }
 
-// --- Renderer: renderMeldungen ---
+// --- Renderer: renderNotices ---
 {
   const sections: SectionLookup = {
     byLineNumber: () => [],
@@ -52,14 +52,14 @@ import type { SectionLookup } from '../types.js';
   const rend = new TuiRenderer(sections);
   const ctx = { url: 'http://x/', requestCount: 0, totalObjects: 0 };
 
-  const baseState = (meldungen: MeldungenView): TuiState => ({
-    query: '', results: [], sel: 0, mode: 'meldungen', detailScroll: 0,
-    filter: null, meldungen, meldungenScroll: 0, notice: null,
+  const baseState = (notices: NoticesView): TuiState => ({
+    query: '', results: [], sel: 0, mode: 'notices', detailScroll: 0,
+    filter: null, notices, noticesScroll: 0, notice: null,
   });
 
   // loading
   const loading = stripAnsi(rend.render(baseState({ status: 'loading', data: null }), ctx, 100, 24));
-  assert.match(loading, /Lade Meldungen/, 'loading-Text');
+  assert.match(loading, /Lade Meldungen/, 'loading text');
 
   // ready with one disruption + one aggregate notice
   const data = {
@@ -91,36 +91,36 @@ import type { SectionLookup } from '../types.js';
   const readyLocated = stripAnsi(rend.render(baseState({ status: 'ready', data: dataLocated }), ctx, 100, 24));
   assert.doesNotMatch(readyLocated, /ohne Ort/, 'located disruption without "ohne Ort" marker');
 
-  // refreshing-Status zeigt "Aktualisiere …"
+  // refreshing status shows "Aktualisiere …"
   const refreshing = stripAnsi(rend.render(baseState({ status: 'refreshing', data }), ctx, 100, 24));
-  assert.match(refreshing, /Aktualisiere/, 'refreshing-Status zeigt Aktualisiere-Hinweis');
+  assert.match(refreshing, /Aktualisiere/, 'refreshing status shows the refresh hint');
 
   // error
   const errData = { ...data, error: 'Netzfehler' };
   const err = stripAnsi(rend.render(baseState({ status: 'ready', data: errData }), ctx, 100, 24));
-  assert.match(err, /Netzfehler/, 'Fehlertext sichtbar');
+  assert.match(err, /Netzfehler/, 'error text visible');
 
   // empty
   const emptyData = { ...data, aggregateNotices: [], disruptionNotices: [], error: null };
   const empty = stripAnsi(rend.render(baseState({ status: 'ready', data: emptyData }), ctx, 100, 24));
-  assert.match(empty, /Keine aktuellen Meldungen/, 'Leer-Hinweis');
+  assert.match(empty, /Keine aktuellen Meldungen/, 'empty hint');
 
-  // notice-Statusmeldung wird im Kopf angezeigt (z. B. nach Ctrl+O / Ctrl+R)
+  // The transient notice is shown in the header (e.g. after Ctrl+O / Ctrl+R).
   const withNotice: TuiState = { ...baseState({ status: 'ready', data: emptyData }), mode: 'list', notice: 'Karte im Browser geöffnet.' };
   const noticeFrame = stripAnsi(rend.render(withNotice, ctx, 100, 24));
-  assert.match(noticeFrame, /Karte im Browser geöffnet/, 'notice im Kopf sichtbar');
+  assert.match(noticeFrame, /Karte im Browser geöffnet/, 'notice visible in the header');
 
-  // Betriebsstelle-Detail: zugehoerige Strecken/Abschnitte (via byStation)
-  const bstEntry = {
-    kind: 'Betriebsstelle' as const, code: 'XY', name: 'Teststelle', detail: '',
+  // Station detail: attached lines/sections (via byStation).
+  const stationEntry = {
+    kind: 'station' as const, code: 'XY', name: 'Teststelle', detail: '',
     data: { stel: 4242, rl100: 'XY', name: 'Teststelle' },
   };
-  const bstState: TuiState = { ...baseState({ status: 'idle', data: null }), mode: 'detail', results: [bstEntry], sel: 0 };
-  const bstFrame = stripAnsi(rend.render(bstState, ctx, 100, 24));
-  assert.match(bstFrame, /Zugehörige Strecken\/Abschnitte \(1\)/, 'Betriebsstelle: Ueberschrift mit Anzahl');
-  assert.match(bstFrame, /1733/, 'Betriebsstelle: Streckennummer sichtbar');
-  assert.match(bstFrame, /Uelzen – Langwedel/, 'Betriebsstelle: von-bis sichtbar');
-  assert.match(bstFrame, /12,3 → 18,7/, 'Betriebsstelle: km-Bereich sichtbar');
+  const stationState: TuiState = { ...baseState({ status: 'idle', data: null }), mode: 'detail', results: [stationEntry], sel: 0 };
+  const stationFrame = stripAnsi(rend.render(stationState, ctx, 100, 24));
+  assert.match(stationFrame, /Zugehörige Strecken\/Abschnitte \(1\)/, 'station: heading with count');
+  assert.match(stationFrame, /1733/, 'station: line number visible');
+  assert.match(stationFrame, /Uelzen – Langwedel/, 'station: from-to visible');
+  assert.match(stationFrame, /12,3 → 18,7/, 'station: km range visible');
 }
 
 console.log('TUI-Teil A+B (wrap, input, renderMeldungen) OK');
