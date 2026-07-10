@@ -36,6 +36,31 @@ export interface LiveTripsResult {
   error: string | null;
 }
 
+// --- Trip details (Transitous trip API) contract: GET /api/trip?tripId= ---
+
+/** One stop of a trip; times in epoch ms (null = the stop has no such time). */
+export interface TripStopDTO {
+  name: string;
+  arriveMs: number | null;
+  schedArriveMs: number | null;
+  departMs: number | null;
+  schedDepartMs: number | null;
+  track: string | null;
+  cancelled: boolean;
+}
+
+/** Response of GET /api/trip?tripId= (server cache: 30 s per trip). */
+export interface TripDetailsResult {
+  /** Display name of the train, e.g. "ICE 1032". */
+  name: string;
+  /** Destination board text of the trip. */
+  headsign: string;
+  realTime: boolean;
+  stops: TripStopDTO[];
+  /** Upstream error; possibly combined with the last cached state in `stops`. */
+  error: string | null;
+}
+
 /**
  * Autocomplete suggestion from GET /api/stations?q= — also the server's domain
  * shape for an operating point (Betriebsstelle), i.e. a node of the network.

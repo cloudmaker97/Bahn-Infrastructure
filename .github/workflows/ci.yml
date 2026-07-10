@@ -46,6 +46,9 @@ jobs:
       - name: Selftest – station repository
         run: npx tsx src/data/station-repository.selftest.ts
 
+      - name: Selftest – trip details (service + normalization)
+        run: npx tsx src/data/trip-details.selftest.ts
+
       - name: Selftest – alignment resolver
         run: npx tsx src/routing/alignment-resolver.selftest.ts
 

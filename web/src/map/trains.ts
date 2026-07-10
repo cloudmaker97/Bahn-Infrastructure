@@ -3,8 +3,9 @@
 // position interpolation (source.setData every 200 ms), "realtime only" filter,
 // hover tooltip and detail popup. Single responsibility: train overlay.
 import type { LayerSpecification, MapGeoJSONFeature, MapLayerMouseEvent } from 'maplibre-gl';
-import { getLiveTrips } from '@/lib/api';
+import { getLiveTrips, getTripDetails } from '@/lib/api';
 import { escapeHtml, fmtTimeHM } from '@/lib/format';
+import type { TripDetailsResult, TripStopDTO } from '@/lib/types';
 import { buildTrack, positionAt, type Track } from '@shared/geo';
 import {
   CATEGORY_COLOR, CATEGORY_COLOR_FALLBACK, matchesTrainQuery, type TrainCategory, type TrainDTO,
@@ -42,6 +43,38 @@ function trainPopupHtml(props: Record<string, unknown>): string {
     `<tr><td class="k">Verspätung</td><td>${delayTxt}</td></tr>` +
     `<tr><td class="k">Echtzeit</td><td>${realTime ? 'ja' : 'nein (Plan)'}</td></tr>` +
     `</table>`;
+}
+
+/** Muted caption above a popup section (same look as the overlay popups). */
+const CAPTION_STYLE = 'margin-top:8px;font-size:11px;color:var(--muted);' +
+  'text-transform:uppercase;letter-spacing:.04em;font-weight:600';
+
+/** One schedule row: times (an/ab + delay), stop name, track. */
+function scheduleRowHtml(s: TripStopDTO, nowMs: number): string {
+  const delayOf = (actual: number | null, sched: number | null): number =>
+    actual != null && sched != null ? Math.round((actual - sched) / 60000) : 0;
+  const delayMin = Math.max(delayOf(s.arriveMs, s.schedArriveMs), delayOf(s.departMs, s.schedDepartMs));
+  const times: string[] = [];
+  if (s.arriveMs != null) times.push(`an ${fmtTimeHM(s.arriveMs)}`);
+  if (s.departMs != null) times.push(`ab ${fmtTimeHM(s.departMs)}`);
+  const timeCell = times.join(' · ') +
+    (delayMin > 0 ? ` <span style="color:#d23f3f">+${delayMin}</span>` : '');
+  const nameCell = escapeHtml(s.name) +
+    (s.track ? ` <span style="color:var(--muted)">· Gl. ${escapeHtml(s.track)}</span>` : '');
+  // Cancelled stops struck through; already served stops dimmed.
+  const passed = (s.departMs ?? s.arriveMs ?? 0) < nowMs;
+  const style = s.cancelled ? 'text-decoration:line-through;opacity:.6' : passed ? 'opacity:.55' : '';
+  return `<tr${style ? ` style="${style}"` : ''}` +
+    `><td class="k" style="white-space:nowrap">${timeCell}</td><td>${nameCell}</td></tr>`;
+}
+
+/** Schedule section of the train popup (caption + scrollable stop table). */
+function scheduleHtml(trip: TripDetailsResult): string {
+  const nowMs = Date.now();
+  const caption = `Fahrplan${trip.headsign ? ` → ${escapeHtml(trip.headsign)}` : ''} (${trip.stops.length} Halte)`;
+  const rows = trip.stops.map((s) => scheduleRowHtml(s, nowMs)).join('');
+  return `<div style="${CAPTION_STYLE}">${caption}</div>` +
+    `<div style="max-height:200px;overflow:auto"><table>${rows}</table></div>`;
 }
 
 /** One loaded train: DTO plus the precomputed track for the interpolation. */
@@ -100,7 +133,7 @@ export class TrainsLayer {
 
     // Click: detail popup via the interactive registry (topmost feature wins).
     controller.registerInteractive(TRAINS_LAYER_ID, {
-      popupHtml: (f: MapGeoJSONFeature) => trainPopupHtml(f.properties as Record<string, unknown>),
+      popupHtml: (f: MapGeoJSONFeature) => this.trainPopupElement(f.properties as Record<string, unknown>),
       kindLabel: () => 'Zug',
       nearbyLabel: (f: MapGeoJSONFeature) =>
         String((f.properties as Record<string, unknown>)['name'] || 'Zug'),
@@ -149,6 +182,31 @@ export class TrainsLayer {
       const shown = this.renderFrame();
       this.updateStatus(shown);
     }
+  }
+
+  /**
+   * Popup content of a train: the base data table immediately, the schedule
+   * (all stops of the trip) loaded asynchronously into the same element.
+   */
+  private trainPopupElement(props: Record<string, unknown>): HTMLElement {
+    const el = document.createElement('div');
+    el.innerHTML = trainPopupHtml(props);
+    const tripId = String(props['tripId'] ?? '');
+    if (!tripId) return el; // no tripId -> base popup only
+    const holder = document.createElement('div');
+    holder.innerHTML = `<div style="margin-top:8px;color:var(--muted)">Fahrplan wird geladen …</div>`;
+    el.appendChild(holder);
+    const unavailable = (reason: string): string =>
+      `<div style="margin-top:8px;color:var(--muted)">Fahrplan nicht verfügbar` +
+      `${reason ? ` (${escapeHtml(reason)})` : ''}</div>`;
+    void getTripDetails(tripId)
+      .then((trip) => {
+        holder.innerHTML = trip.stops.length ? scheduleHtml(trip) : unavailable(trip.error ?? '');
+      })
+      .catch((e) => {
+        holder.innerHTML = unavailable(e instanceof Error ? e.message : String(e));
+      });
+    return el;
   }
 
   /**
@@ -250,6 +308,7 @@ export class TrainsLayer {
         geometry: { type: 'Point', coordinates: [pos[1], pos[0]] },
         properties: {
           id: dto.id,
+          tripId: dto.tripId,
           name: dto.name,
           category: dto.category,
           color: categoryColor(dto.category),

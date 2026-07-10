@@ -135,6 +135,7 @@ function near(actual: number, expected: number, tol: number, msg: string): void 
   assert.strictEqual(trains.length, 1, `normalizeTrips: ${trains.length} instead of 1`);
   const t = trains[0]!;
   assert.strictEqual(t.name, 'ICE 123', 'display name from trips[0]');
+  assert.strictEqual(t.tripId, 'trip-1', 'raw tripId carried over (key for /api/trip)');
   assert.strictEqual(t.category, 'long-distance', 'category long-distance');
   assert.strictEqual(t.delayMin, 3, `delayMin: ${t.delayMin}`);
   assert.strictEqual(t.realTime, true, 'realTime carried over');

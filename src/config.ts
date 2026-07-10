@@ -38,6 +38,11 @@ export const LIVETRIPS_API = 'https://api.transitous.org/api/v6/map/trips';
 /** Burst cache per zoom bucket (rate-limit protection towards Transitous). */
 export const LIVETRIPS_TTL_MS = 10_000;
 
+/** Transitous trip – source of the per-trip schedule (all stops with times). */
+export const TRIP_API = 'https://api.transitous.org/api/v6/trip';
+/** Cache duration of trip details per tripId (delays change, lines rarely). */
+export const TRIP_TTL_MS = 30_000;
+
 /** All layers that are scraped and/or built into the map. */
 export interface LayerDef {
   key: string;

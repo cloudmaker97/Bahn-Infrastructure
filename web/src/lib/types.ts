@@ -7,6 +7,7 @@ export type { TrainDTO };
 
 export type {
   VersionInfo, LiveTripsResult, LatLng, StationSuggestion,
+  TripStopDTO, TripDetailsResult,
   RouteMode, RouteWaypoint, RouteSegment, RouteResult, RouteError, RouteResponse,
   NetworkStatusCategory, EffectDTO, ValidityDTO,
   AggregateNoticeDTO, DisruptionNoticeDTO, NetworkStatusResult,
