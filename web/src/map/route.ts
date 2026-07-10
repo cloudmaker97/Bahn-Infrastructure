@@ -1,59 +1,54 @@
-// Routen-Overlay: zeichnet das /api/route-Ergebnis (rote Linie + Start-/Zielpunkt
-// mit Hover-Tooltip) und zoomt auf die Route. ACHTUNG: der Server liefert
-// segments[].coords als [lat, lon] (Leaflet-Konvention, siehe
-// src/routing/route-service.ts) – für MapLibre nach [lon, lat] drehen.
+// Route overlay: draws the /api/route result (red line + start/end points with
+// hover tooltip) and zooms to the route. NOTE: the server delivers
+// segments[].coords as [lat, lon] (see src/routing/route-service.ts) – rotate
+// to [lon, lat] for MapLibre.
 import maplibregl from 'maplibre-gl';
 import type { LayerSpecification, MapLayerMouseEvent } from 'maplibre-gl';
-import { escapeHtml } from '@/lib/format';
 import type { RouteResult, RouteWaypoint } from '@/lib/types';
+import { emptyFeatureCollection, HoverTooltip, TRAINS_LAYER_ID } from './common';
 import type { MapController } from './controller';
 
 const LINE_SOURCE = 'route-line';
 const LINE_LAYER = 'route-line';
 const POINT_SOURCE = 'route-points';
 const POINT_LAYER = 'route-points';
-/** Vor den Zug-Layer einfügen, damit die Züge über der Route liegen. */
-const TRAINS_LAYER_ID = 'trains';
-
-/** Leere FeatureCollection (zum Anlegen und Leeren der Sources). */
-function leer(): GeoJSON.FeatureCollection {
-  return { type: 'FeatureCollection', features: [] };
-}
 
 export class RouteLayer {
   private layersReady = false;
-  private tooltip: maplibregl.Popup | null = null;
+  private tooltip: HoverTooltip;
 
   constructor(private controller: MapController) {
-    // Hover-Tooltip für Start-/Zielpunkt (delegiert; greift, sobald der Layer existiert).
-    controller.map.on('mousemove', POINT_LAYER, (e: MapLayerMouseEvent) => this.showTooltip(e));
-    controller.map.on('mouseleave', POINT_LAYER, () => this.tooltip?.remove());
+    this.tooltip = new HoverTooltip(controller.map);
+    // Hover tooltip for start/end points (delegated; applies once the layer exists).
+    controller.map.on('mousemove', POINT_LAYER, (e: MapLayerMouseEvent) =>
+      this.tooltip.showAt(e, String((e.features?.[0]?.properties as Record<string, unknown>)?.['label'] ?? '')));
+    controller.map.on('mouseleave', POINT_LAYER, () => this.tooltip.hide());
   }
 
-  /** Route zeichnen (Linie + Start/Ziel) und auf die Gesamtausdehnung zoomen. */
+  /** Draws the route (line + start/end) and zooms to its full extent. */
   show(route: RouteResult): void {
     this.controller.onReady(() => {
       this.ensureLayers();
-      // [lat, lon] -> [lon, lat] drehen (Server nutzt die Leaflet-Konvention).
-      const linien: GeoJSON.Feature[] = route.segments.map((s) => ({
+      // Rotate [lat, lon] -> [lon, lat] (the server uses the [lat, lon] convention).
+      const lines: GeoJSON.Feature[] = route.segments.map((s) => ({
         type: 'Feature',
         geometry: { type: 'LineString', coordinates: s.coords.map(([lat, lon]) => [lon, lat]) },
         properties: {},
       }));
-      this.controller.addOrSetGeoJson(LINE_SOURCE, { type: 'FeatureCollection', features: linien });
+      this.controller.addOrSetGeoJson(LINE_SOURCE, { type: 'FeatureCollection', features: lines });
 
-      const punkte: GeoJSON.Feature[] = [];
-      const punkt = (wp: RouteWaypoint, farbe: string, rolle: string): void => {
+      const points: GeoJSON.Feature[] = [];
+      const point = (wp: RouteWaypoint, color: string, role: string): void => {
         if (wp.lat == null || wp.lon == null) return;
-        punkte.push({
+        points.push({
           type: 'Feature',
           geometry: { type: 'Point', coordinates: [wp.lon, wp.lat] },
-          properties: { farbe, beschriftung: `${rolle}: ${wp.rl100 || ''} ${wp.name || ''}` },
+          properties: { color, label: `${role}: ${wp.rl100 || ''} ${wp.name || ''}` },
         });
       };
-      punkt(route.from, '#38b48b', 'Start');
-      punkt(route.to, '#ff2d55', 'Ziel');
-      this.controller.addOrSetGeoJson(POINT_SOURCE, { type: 'FeatureCollection', features: punkte });
+      point(route.from, '#38b48b', 'Start');
+      point(route.to, '#ff2d55', 'Ziel');
+      this.controller.addOrSetGeoJson(POINT_SOURCE, { type: 'FeatureCollection', features: points });
 
       const bounds = new maplibregl.LngLatBounds();
       for (const s of route.segments) for (const [lat, lon] of s.coords) bounds.extend([lon, lat]);
@@ -61,18 +56,18 @@ export class RouteLayer {
     });
   }
 
-  /** Route von der Karte entfernen (Sources leeren, Layer bleiben bestehen). */
+  /** Removes the route from the map (clears the sources, the layers stay). */
   clear(): void {
-    this.tooltip?.remove();
+    this.tooltip.hide();
     if (!this.layersReady) return;
-    this.controller.addOrSetGeoJson(LINE_SOURCE, leer());
-    this.controller.addOrSetGeoJson(POINT_SOURCE, leer());
+    this.controller.addOrSetGeoJson(LINE_SOURCE, emptyFeatureCollection());
+    this.controller.addOrSetGeoJson(POINT_SOURCE, emptyFeatureCollection());
   }
 
   private ensureLayers(): void {
     if (this.layersReady) return;
-    this.controller.addOrSetGeoJson(LINE_SOURCE, leer());
-    this.controller.addOrSetGeoJson(POINT_SOURCE, leer());
+    this.controller.addOrSetGeoJson(LINE_SOURCE, emptyFeatureCollection());
+    this.controller.addOrSetGeoJson(POINT_SOURCE, emptyFeatureCollection());
     const lineLayer: LayerSpecification = {
       id: LINE_LAYER,
       type: 'line',
@@ -85,27 +80,14 @@ export class RouteLayer {
       source: POINT_SOURCE,
       paint: {
         'circle-radius': 7,
-        'circle-color': ['get', 'farbe'],
+        'circle-color': ['get', 'color'],
         'circle-stroke-color': '#111111',
         'circle-stroke-width': 2,
       },
     };
+    // Insert before the trains layer so the trains render above the route.
     this.controller.addLayerOnce(lineLayer, TRAINS_LAYER_ID);
     this.controller.addLayerOnce(pointLayer, TRAINS_LAYER_ID);
     this.layersReady = true;
-  }
-
-  private showTooltip(e: MapLayerMouseEvent): void {
-    const f = e.features?.[0];
-    if (!f) return;
-    const text = String((f.properties as Record<string, unknown>)?.['beschriftung'] ?? '');
-    if (!text) return;
-    const pos: [number, number] = f.geometry.type === 'Point'
-      ? [f.geometry.coordinates[0]!, f.geometry.coordinates[1]!]
-      : [e.lngLat.lng, e.lngLat.lat];
-    if (!this.tooltip) {
-      this.tooltip = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 12 });
-    }
-    this.tooltip.setLngLat(pos).setHTML(escapeHtml(text)).addTo(this.controller.map);
   }
 }

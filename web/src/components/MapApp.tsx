@@ -6,10 +6,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RouteResult } from '@/lib/types';
 import { MapController } from '@/map/controller';
-import { IsrOverlays, OVERLAY_EINTRAEGE, type OverlayKey } from '@/map/isr-overlays';
+import { IsrOverlays, OVERLAY_ENTRIES, type OverlayKey } from '@/map/isr-overlays';
 import { NearbyPicker } from '@/map/nearby';
 import { RouteLayer } from '@/map/route';
-import { StreckenLayer, type ColorMode } from '@/map/strecken';
+import { RailNetworkLayer, type ColorMode } from '@/map/rail-network';
 import { NetworkStatusLayers, type NetworkStatusCategory, type NetworkStatusPanelData } from '@/map/network-status';
 import { TrainsLayer } from '@/map/trains';
 import LayerControl, { type LayerEntry } from './LayerControl';
@@ -21,13 +21,13 @@ import VersionBadge from './VersionBadge';
 
 export default function MapApp() {
   const mapDiv = useRef<HTMLDivElement | null>(null);
-  const streckenRef = useRef<StreckenLayer | null>(null);
+  const railNetworkRef = useRef<RailNetworkLayer | null>(null);
   const trainsRef = useRef<TrainsLayer | null>(null);
   const networkStatusRef = useRef<NetworkStatusLayers | null>(null);
   const overlaysRef = useRef<IsrOverlays | null>(null);
   const routeRef = useRef<RouteLayer | null>(null);
 
-  const [colorMode, setColorMode] = useState<ColorMode>('elektr');
+  const [colorMode, setColorMode] = useState<ColorMode>('electrification');
   // Standard wie im Alt-Frontend: Live-Züge AN, Unterfilter „Nur Echtzeit" AN,
   // Störungen AN, Baustellen/Streckenruhen und alle ISR-Overlays AUS.
   const [liveOn, setLiveOn] = useState(true);
@@ -47,21 +47,21 @@ export default function MapApp() {
   useEffect(() => {
     if (!mapDiv.current) return;
     const controller = new MapController(mapDiv.current);
-    const strecken = new StreckenLayer(controller, (text, frac) => setStreckenStatus({ text, frac }));
+    const railNetwork = new RailNetworkLayer(controller, (text, frac) => setStreckenStatus({ text, frac }));
     const trains = new TrainsLayer(controller, setTrainsStatus, { realtimeOnly: true });
-    const networkStatus = new NetworkStatusLayers(controller, strecken, setSiStatus, setSiDaten);
-    const overlays = new IsrOverlays(controller, strecken, (key, count) =>
+    const networkStatus = new NetworkStatusLayers(controller, railNetwork, setSiStatus, setSiDaten);
+    const overlays = new IsrOverlays(controller, railNetwork, (key, count) =>
       setOverlayCounts((prev) => ({ ...prev, [key]: count })));
     const route = new RouteLayer(controller);
     const nearby = new NearbyPicker(controller);
-    streckenRef.current = strecken;
+    railNetworkRef.current = railNetwork;
     trainsRef.current = trains;
     networkStatusRef.current = networkStatus;
     overlaysRef.current = overlays;
     routeRef.current = route;
 
-    // Redraw the closure lines once the line geometry (id index) is loaded.
-    void strecken.load().then(() => networkStatus.rebuildClosures());
+    // Redraw the closure lines once the line geometry (line index) is loaded.
+    void railNetwork.load().then(() => networkStatus.rebuildClosures());
     networkStatus.start();
     overlays.loadAll();
 
@@ -77,7 +77,7 @@ export default function MapApp() {
       networkStatus.dispose();
       trains.dispose();
       controller.dispose();
-      streckenRef.current = null;
+      railNetworkRef.current = null;
       trainsRef.current = null;
       networkStatusRef.current = null;
       overlaysRef.current = null;
@@ -85,8 +85,8 @@ export default function MapApp() {
     };
   }, []);
 
-  // UI-Zustand an die (imperativen) Layer weiterreichen.
-  useEffect(() => { streckenRef.current?.setColorMode(colorMode); }, [colorMode]);
+  // Pass the UI state down to the (imperative) layers.
+  useEffect(() => { railNetworkRef.current?.setColorMode(colorMode); }, [colorMode]);
   useEffect(() => {
     const trains = trainsRef.current;
     if (!trains) return;
@@ -109,9 +109,9 @@ export default function MapApp() {
     }
   }, [overlayOn]);
 
-  // Streckensuche: Highlight + Zoom im Layer, Status-Meldung wie im Alt-Frontend.
+  // Line search: highlight + zoom in the layer, status message as in the old frontend.
   const handleSearch = (nr: string): void => {
-    const n = streckenRef.current?.search(nr) ?? 0;
+    const n = railNetworkRef.current?.search(nr) ?? 0;
     setStreckenStatus({ text: n > 0 ? `Strecke ${nr}: ${n} Abschnitt(e)` : `Strecke ${nr} nicht gefunden` });
   };
 
@@ -129,12 +129,12 @@ export default function MapApp() {
     );
   }
   const overlayItems: LayerEntry[] = [];
-  for (const eintrag of OVERLAY_EINTRAEGE) {
-    const count = overlayCounts[eintrag.key];
-    if (count == null) continue; // erst anbieten, wenn die Daten geladen sind
+  for (const entry of OVERLAY_ENTRIES) {
+    const count = overlayCounts[entry.key];
+    if (count == null) continue; // offer only once the data has loaded
     overlayItems.push({
-      key: `ov-${eintrag.key}`, label: eintrag.label, count,
-      checked: overlayOn[eintrag.key] ?? false,
+      key: `ov-${entry.key}`, label: entry.label, count,
+      checked: overlayOn[entry.key] ?? false,
     });
   }
   if (overlayItems.length) layerItems.push({ key: 'sep-overlays', divider: true }, ...overlayItems);

@@ -1,15 +1,16 @@
 // Network-status overlays (disruptions/construction sites/line closures from
 // strecken-info.de, server-cached via GET /api/streckeninfo): one point and one
 // line layer per category; line closures additionally as a dashed line along the
-// whole railway line (geometry from the section index of the StreckenLayer) plus
-// an anchor point. Auto-refresh every 3 minutes + SSE push.
+// whole railway line (geometry from the section index of the RailNetworkLayer)
+// plus an anchor point. Auto-refresh every 3 minutes + SSE push.
 // Single responsibility: network-status overlay.
 import type { ExpressionSpecification, LayerSpecification, MapGeoJSONFeature } from 'maplibre-gl';
 import { getNetworkStatus } from '@/lib/api';
 import { fmtZeitraum, tablePopupHtml } from '@/lib/format';
 import type { AggregateNoticeDTO, NetworkStatusCategory, NetworkStatusResult } from '@/lib/types';
+import { emptyFeatureCollection, TRAINS_LAYER_ID } from './common';
 import type { MapController } from './controller';
-import type { StreckenLayer } from './strecken';
+import type { RailNetworkLayer } from './rail-network';
 
 export type { NetworkStatusCategory } from '@/lib/types';
 
@@ -23,8 +24,6 @@ export const STATUS_COLOR: Record<NetworkStatusCategory, string> = {
 /** Auto-refresh every 3 minutes; the SSE push additionally reloads immediately. */
 const REFRESH_MS = 180000;
 const EVENTS_URL = '/api/streckeninfo/events';
-/** Insert before the trains layer so the trains render above the notices. */
-const TRAINS_LAYER_ID = 'trains';
 
 /** Source/layer IDs per category (point and line layer share the source). */
 const CATEGORY_IDS: Record<NetworkStatusCategory, { source: string; line: string; point: string }> = {
@@ -121,14 +120,9 @@ export function closurePopupHtml(p: Record<string, unknown>): string {
   ]);
 }
 
-/** Empty FeatureCollection (initial data of the sources). */
-function empty(): GeoJSON.FeatureCollection {
-  return { type: 'FeatureCollection', features: [] };
-}
-
 /** The shared contract type uses its own minimal GeoJSON shape; MapLibre wants the DOM one. */
 function asGeoJson(fc: unknown): GeoJSON.FeatureCollection {
-  return (fc ?? empty()) as GeoJSON.FeatureCollection;
+  return (fc ?? emptyFeatureCollection()) as GeoJSON.FeatureCollection;
 }
 
 export class NetworkStatusLayers {
@@ -142,7 +136,7 @@ export class NetworkStatusLayers {
 
   constructor(
     private controller: MapController,
-    private railNetwork: StreckenLayer,
+    private railNetwork: RailNetworkLayer,
     private onStatus: (text: string) => void,
     private onData: (data: NetworkStatusPanelData) => void,
   ) {
@@ -235,7 +229,7 @@ export class NetworkStatusLayers {
     for (const f of fc?.features ?? []) {
       const p = (f.properties ?? {}) as Record<string, unknown>;
       const nr = p['lineNumber'];
-      const sections = nr != null ? this.railNetwork.featuresByNr(String(nr)) : [];
+      const sections = nr != null ? this.railNetwork.featuresByLineNumber(String(nr)) : [];
       let drawn = false;
       for (const seg of sections) {
         if (seg.geometry?.type !== 'LineString' && seg.geometry?.type !== 'MultiLineString') continue;
@@ -257,7 +251,7 @@ export class NetworkStatusLayers {
   private ensureLayers(): void {
     if (this.layersReady) return;
     for (const category of ['disruption', 'construction', 'closure'] as const) {
-      this.controller.addOrSetGeoJson(CATEGORY_IDS[category].source, empty());
+      this.controller.addOrSetGeoJson(CATEGORY_IDS[category].source, emptyFeatureCollection());
     }
     // SCHWER (severe) stronger than LEICHT (line width 6 instead of 4, point radius 8 instead of 6).
     const severe: ExpressionSpecification =

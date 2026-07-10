@@ -1,8 +1,7 @@
-// Live-Züge: Poll über die eigene Server-API /api/livetrips (KEIN direkter
-// Transitous-Aufruf – der Server cached und filtert), flüssige Bewegung über
-// Positions-Interpolation (source.setData im 200-ms-Takt), Filter „Nur Echtzeit",
-// Hover-Tooltip und Detail-Popup. Eine Verantwortung: Zug-Overlay.
-import maplibregl from 'maplibre-gl';
+// Live trains: polling via our own server API /api/livetrips (NO direct
+// Transitous call – the server caches and filters), smooth movement via
+// position interpolation (source.setData every 200 ms), "realtime only" filter,
+// hover tooltip and detail popup. Single responsibility: train overlay.
 import type { LayerSpecification, MapGeoJSONFeature, MapLayerMouseEvent } from 'maplibre-gl';
 import { getLiveTrips } from '@/lib/api';
 import { escapeHtml, fmtTimeHM } from '@/lib/format';
@@ -11,41 +10,41 @@ import {
   CATEGORY_COLOR, CATEGORY_COLOR_FALLBACK, type TrainCategory, type TrainDTO,
 } from '@shared/live-trips-core';
 import { decodePolyline } from '@shared/polyline';
+import { emptyFeatureCollection, HoverTooltip, TRAINS_LAYER_ID } from './common';
 import type { MapController } from './controller';
 
-const SOURCE_ID = 'trains';
-const LAYER_ID = 'trains';
-/** Client-Poll ~15 s (der Server cached 10 s je Zoom-Bucket). */
+const SOURCE_ID = TRAINS_LAYER_ID;
+/** Client poll ~15 s (the server caches 10 s per zoom bucket). */
 const REFETCH_MS = 15000;
 const DEBOUNCE_MS = 400;
-/** Positionen ~5x/s aktualisieren – flüssig genug, sehr günstig in WebGL. */
+/** Update positions ~5x/s – smooth enough and very cheap in WebGL. */
 const ANIM_MS = 200;
-/** Zoom-Gate in Transitous-Zoomstufen (MapLibre-Zoom + 1). */
+/** Zoom gate in Transitous zoom levels (MapLibre zoom + 1). */
 const MIN_TRANSITOUS_ZOOM = 3;
 
-/** Kategorie-Farbe (fern rot, regio grün, sbahn blau, Fallback grau). */
+/** Category color (long-distance red, regional green, suburban blue, fallback grey). */
 function categoryColor(category: TrainCategory): string {
   return category === 'other' ? CATEGORY_COLOR_FALLBACK : CATEGORY_COLOR[category];
 }
 
-/** Detail-Popup eines Zuges (Texte wie im Alt-Frontend public/live-trips.js). */
+/** Detail popup of a train (texts as in the old frontend public/live-trips.js). */
 function trainPopupHtml(props: Record<string, unknown>): string {
   const delay = Number(props['delayMin'] ?? 0);
   const delayTxt = delay > 0
     ? `<span style="color:#d23f3f">+${delay} min</span>`
     : delay < 0 ? `${delay} min` : 'pünktlich';
   const realTime = props['realTime'] === true || props['realTime'] === 'true';
-  const zeit = (key: string) => fmtTimeHM(Number(props[key] ?? 0));
+  const timeOf = (key: string) => fmtTimeHM(Number(props[key] ?? 0));
   return `<h3>${escapeHtml(props['name'] || 'Zug')}</h3><table>` +
     `<tr><td class="k">von → nach</td><td>${escapeHtml(props['fromName'] ?? '')} → ${escapeHtml(props['toName'] ?? '')}</td></tr>` +
-    `<tr><td class="k">planmäßig</td><td>ab ${zeit('schedDepartMs')} · an ${zeit('schedArriveMs')}</td></tr>` +
-    `<tr><td class="k">aktuell</td><td>ab ${zeit('departMs')} · an ${zeit('arriveMs')}</td></tr>` +
+    `<tr><td class="k">planmäßig</td><td>ab ${timeOf('schedDepartMs')} · an ${timeOf('schedArriveMs')}</td></tr>` +
+    `<tr><td class="k">aktuell</td><td>ab ${timeOf('departMs')} · an ${timeOf('arriveMs')}</td></tr>` +
     `<tr><td class="k">Verspätung</td><td>${delayTxt}</td></tr>` +
     `<tr><td class="k">Echtzeit</td><td>${realTime ? 'ja' : 'nein (Plan)'}</td></tr>` +
     `</table>`;
 }
 
-/** Ein geladener Zug: DTO plus vorberechneter Fahrweg für die Interpolation. */
+/** One loaded train: DTO plus the precomputed track for the interpolation. */
 interface TrainEntry {
   dto: TrainDTO;
   track: Track;
@@ -61,20 +60,20 @@ export class TrainsLayer {
   private animTimer: ReturnType<typeof setInterval> | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private stamp = '';
-  private fehler: string | null = null;
-  private tooltip: maplibregl.Popup | null = null;
+  private lastError: string | null = null;
+  private tooltip: HoverTooltip;
 
-  // Gebundene Handler, damit dispose() sie wieder abmelden kann.
+  // Bound handlers so dispose() can unregister them again.
   private readonly onMoveEnd = (): void => {
     if (this.active) this.scheduleRefetch();
   };
   private readonly onVisibility = (): void => {
     if (!this.active) return;
     if (document.hidden) {
-      // Hintergrund-Tab: kein Nachladen (spart Netz/CPU) …
+      // Background tab: no refetching (saves network/CPU) …
       this.clearRefetchTimer();
     } else {
-      // … beim Zurückkehren sofort aktualisieren und den Takt wieder aufnehmen.
+      // … refresh immediately on return and resume the interval.
       void this.fetchTrips();
       if (!this.refetchTimer) this.refetchTimer = setInterval(() => void this.fetchTrips(), REFETCH_MS);
     }
@@ -86,14 +85,15 @@ export class TrainsLayer {
     opts: { realtimeOnly?: boolean } = {},
   ) {
     this.realtimeOnly = opts.realtimeOnly ?? true;
+    this.tooltip = new HoverTooltip(controller.map);
 
     controller.onReady(() => {
       this.ensureLayer();
       this.layerReady = true;
     });
 
-    // Klick: Detail-Popup über die Interaktiv-Registry (oberstes Feature gewinnt).
-    controller.registerInteractive(LAYER_ID, {
+    // Click: detail popup via the interactive registry (topmost feature wins).
+    controller.registerInteractive(TRAINS_LAYER_ID, {
       popupHtml: (f: MapGeoJSONFeature) => trainPopupHtml(f.properties as Record<string, unknown>),
       kindLabel: () => 'Zug',
       nearbyLabel: (f: MapGeoJSONFeature) =>
@@ -102,26 +102,27 @@ export class TrainsLayer {
         String((f.properties as Record<string, unknown>)['color'] ?? CATEGORY_COLOR_FALLBACK),
     });
 
-    // Hover: kleines Tooltip-Popup mit dem Zugnamen.
-    controller.map.on('mousemove', LAYER_ID, (e: MapLayerMouseEvent) => this.showTooltip(e));
-    controller.map.on('mouseleave', LAYER_ID, () => this.hideTooltip());
+    // Hover: a small tooltip popup with the train name.
+    controller.map.on('mousemove', TRAINS_LAYER_ID, (e: MapLayerMouseEvent) =>
+      this.tooltip.showAt(e, String((e.features?.[0]?.properties as Record<string, unknown>)?.['name'] ?? '')));
+    controller.map.on('mouseleave', TRAINS_LAYER_ID, () => this.tooltip.hide());
 
     controller.map.on('moveend', this.onMoveEnd);
     controller.map.on('zoomend', this.onMoveEnd);
     document.addEventListener('visibilitychange', this.onVisibility);
   }
 
-  /** Overlay aktivieren: sofort laden, dann alle 15 s + debounced bei Kartenbewegung. */
+  /** Activates the overlay: load immediately, then every 15 s + debounced on map moves. */
   start(): void {
     if (this.active) return;
     this.active = true;
-    this.controller.setVisible(LAYER_ID, true);
+    this.controller.setVisible(TRAINS_LAYER_ID, true);
     void this.fetchTrips();
     this.refetchTimer = setInterval(() => void this.fetchTrips(), REFETCH_MS);
     this.animTimer = setInterval(() => this.renderFrame(), ANIM_MS);
   }
 
-  /** Overlay deaktivieren: Timer stoppen, Züge leeren, Status löschen. */
+  /** Deactivates the overlay: stop timers, clear trains, clear the status. */
   stop(): void {
     if (!this.active) return;
     this.active = false;
@@ -130,12 +131,12 @@ export class TrainsLayer {
     if (this.debounceTimer) { clearTimeout(this.debounceTimer); this.debounceTimer = null; }
     this.entries = [];
     this.renderFrame();
-    this.controller.setVisible(LAYER_ID, false);
-    this.hideTooltip();
+    this.controller.setVisible(TRAINS_LAYER_ID, false);
+    this.tooltip.hide();
     this.onStatus('');
   }
 
-  /** Filter „Nur Echtzeit" umschalten (wirkt sofort auf die gerenderte Liste). */
+  /** Toggles the "realtime only" filter (applies immediately to the rendered list). */
   setRealtimeOnly(on: boolean): void {
     this.realtimeOnly = on;
     if (this.active) {
@@ -144,7 +145,7 @@ export class TrainsLayer {
     }
   }
 
-  /** Alles abbauen (React-cleanup); die Karte selbst räumt der Controller ab. */
+  /** Tears everything down (React cleanup); the controller removes the map itself. */
   dispose(): void {
     this.stop();
     document.removeEventListener('visibilitychange', this.onVisibility);
@@ -153,9 +154,9 @@ export class TrainsLayer {
   }
 
   private ensureLayer(): void {
-    this.controller.addOrSetGeoJson(SOURCE_ID, { type: 'FeatureCollection', features: [] });
+    this.controller.addOrSetGeoJson(SOURCE_ID, emptyFeatureCollection());
     const layer: LayerSpecification = {
-      id: LAYER_ID,
+      id: TRAINS_LAYER_ID,
       type: 'circle',
       source: SOURCE_ID,
       paint: {
@@ -166,7 +167,7 @@ export class TrainsLayer {
       },
     };
     this.controller.addLayerOnce(layer);
-    this.controller.setVisible(LAYER_ID, this.active);
+    this.controller.setVisible(TRAINS_LAYER_ID, this.active);
   }
 
   private scheduleRefetch(): void {
@@ -194,7 +195,7 @@ export class TrainsLayer {
         dto,
         track: buildTrack(decodePolyline(dto.polyline)),
       }));
-      this.fehler = res.error;
+      this.lastError = res.error;
       this.stamp = new Date().toLocaleTimeString('de-DE');
       const shown = this.renderFrame();
       this.updateStatus(shown);
@@ -206,8 +207,8 @@ export class TrainsLayer {
   }
 
   /**
-   * Zeichnet den aktuellen Animationsstand: Position je Zug aus dem Zeitanteil
-   * zwischen Abfahrt und Ankunft interpoliert. @returns Anzahl gezeigter Züge.
+   * Draws the current animation frame: each train's position interpolated from
+   * the time fraction between departure and arrival. @returns shown train count.
    */
   private renderFrame(): number {
     if (!this.layerReady) return 0;
@@ -244,34 +245,16 @@ export class TrainsLayer {
 
   private updateStatus(shown: number): void {
     if (!this.active) return;
-    // Vor dem ersten erfolgreichen Laden keine (irreführende) Zählung melden.
-    if (!this.stamp && !this.fehler) return;
-    if (this.fehler) {
-      this.onStatus(`Live-Züge nicht verfügbar (${this.fehler})`);
+    // Do not report a (misleading) count before the first successful load.
+    if (!this.stamp && !this.lastError) return;
+    if (this.lastError) {
+      this.onStatus(`Live-Züge nicht verfügbar (${this.lastError})`);
       return;
     }
-    // Der Server liefert immer alle Züge Deutschlands (DE-Bbox, gecacht) – nicht nur den Ausschnitt.
+    // The server always delivers all trains in Germany (DE bbox, cached) – not just the viewport.
     this.onStatus(
       `Live-Züge: ${shown} in Deutschland${this.realtimeOnly ? ' (nur Echtzeit)' : ''}` +
       (this.stamp ? ` · Stand ${this.stamp}` : ''),
     );
-  }
-
-  private showTooltip(e: MapLayerMouseEvent): void {
-    const f = e.features?.[0];
-    if (!f) return;
-    const name = String((f.properties as Record<string, unknown>)?.['name'] ?? '');
-    if (!name) { this.hideTooltip(); return; }
-    const pos: [number, number] = f.geometry.type === 'Point'
-      ? [f.geometry.coordinates[0]!, f.geometry.coordinates[1]!]
-      : [e.lngLat.lng, e.lngLat.lat];
-    if (!this.tooltip) {
-      this.tooltip = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 12 });
-    }
-    this.tooltip.setLngLat(pos).setHTML(escapeHtml(name)).addTo(this.controller.map);
-  }
-
-  private hideTooltip(): void {
-    this.tooltip?.remove();
   }
 }
