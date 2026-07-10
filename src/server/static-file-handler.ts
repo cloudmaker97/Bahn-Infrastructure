@@ -1,4 +1,4 @@
-// Liefert statische Dateien aus public/ (und data/web/ unter /data/). Verantwortung: Static-IO (SRP).
+// Serves static files from public/ (and data/web/ under /data/). Responsibility: static IO (SRP).
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import type { ServerResponse } from 'node:http';
@@ -24,8 +24,8 @@ export class StaticFileHandler {
       const buf = await readFile(file);
       res.writeHead(200, {
         'Content-Type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream',
-        // Immer revalidieren: verhindert, dass der Browser veraltete HTML/JS/CSS-Dateien
-        // aus dem Cache serviert (sonst kommen Frontend-Änderungen nicht zuverlässig an).
+        // Always revalidate: prevents the browser from serving stale HTML/JS/CSS
+        // from its cache (otherwise frontend changes do not arrive reliably).
         'Cache-Control': 'no-cache',
       });
       res.end(buf);

@@ -1,18 +1,18 @@
-// Verwaltet Server-Sent-Events-Clients und broadcastet Refresh-Signale.
-// Verantwortung: SSE-Verbindungsverwaltung (SRP). Kennt keine Fachinhalte.
+// Manages server-sent-events clients and broadcasts refresh signals.
+// Responsibility: SSE connection management (SRP). Knows no domain content.
 import type { ServerResponse } from 'node:http';
 
 export class SseHub {
   private clients = new Set<ServerResponse>();
 
-  /** Registriert eine offene Response als SSE-Stream. */
+  /** Registers an open response as an SSE stream. */
   addClient(res: ServerResponse): void {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
     });
-    res.write('retry: 5000\n\n'); // Reconnect-Hinweis fuer EventSource
+    res.write('retry: 5000\n\n'); // reconnect hint for EventSource
     this.clients.add(res);
     res.on('close', () => {
       this.clients.delete(res);
@@ -22,7 +22,7 @@ export class SseHub {
     });
   }
 
-  /** Sendet ein (datenloses) Event an alle Clients; tote Clients werden entfernt. */
+  /** Sends a (data-less) event to all clients; dead clients are removed. */
   broadcast(event: string): void {
     const frame = `event: ${event}\ndata: {}\n\n`;
     for (const res of this.clients) {
