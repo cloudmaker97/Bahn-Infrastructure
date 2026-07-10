@@ -13,10 +13,10 @@ interface EntrySource {
 
 const SOURCES: EntrySource[] = [
   {
-    kind: 'line', file: 'strecken_uebersicht.json',
+    kind: 'line', file: 'line-overview.json',
     map: (r) => ({
-      code: String(r['ISR_STRE_NR']), name: String(r['verlauf'] ?? ''),
-      detail: `${r['anz_abschnitte']} Abschnitte · ${r['betreiber'] ?? ''}`,
+      code: String(r['lineNumber']), name: String(r['course'] ?? ''),
+      detail: `${r['sectionCount']} Abschnitte · ${r['operators'] ?? ''}`,
     }),
   },
   {

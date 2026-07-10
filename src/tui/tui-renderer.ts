@@ -185,8 +185,8 @@ export class TuiRenderer {
     const list = this.sections.byLineNumber(nr);
     const body: string[] = [];
     const d = e.data;
-    if (d['betreiber']) body.push(` ${c('90', pad('Betreiber', 14))}  ${d['betreiber']}`);
-    if (d['staat']) body.push(` ${c('90', pad('Staat', 14))}  ${d['staat']}`);
+    if (d['operators']) body.push(` ${c('90', pad('Betreiber', 14))}  ${d['operators']}`);
+    if (d['countries']) body.push(` ${c('90', pad('Staat', 14))}  ${d['countries']}`);
     body.push(` ${c('90', pad('Abschnitte', 14))}  ${list.length}`);
     body.push('');
     body.push(bold(` Abschnitte (${list.length}):`));

@@ -1,7 +1,7 @@
-// WFS-Scraper: laedt alle in config.LAYERS definierten ISR-Layer vom DB-GeoServer.
-// Schreibt je Layer:  geo_<key>.json (Geometrie WGS84) + <key>_meta.json (Properties) + <key>.csv
-// Aufruf:  npm run scrape           (alle Layer)
-//          npm run scrape -- tunnel (nur ein Layer)
+// WFS scraper: downloads all ISR layers defined in config.LAYERS from the DB GeoServer.
+// Writes per layer:  geo_<key>.json (geometry WGS84) + <key>_meta.json (properties) + <key>.csv
+// Invocation:  npm run scrape           (all layers)
+//              npm run scrape -- tunnel (a single layer)
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -30,7 +30,7 @@ function toCsv(props: string[], rows: Record<string, unknown>[]): string {
   };
   const lines = [props.join(',')];
   for (const r of rows) lines.push(props.map((k) => esc(r[k])).join(','));
-  return '﻿' + lines.join('\r\n'); // BOM fuer Excel
+  return '﻿' + lines.join('\r\n'); // BOM for Excel
 }
 
 async function scrapeLayer(key: string, typeName: string): Promise<void> {
@@ -50,7 +50,7 @@ async function scrapeLayer(key: string, typeName: string): Promise<void> {
   console.log(`[${key}] fertig.`);
 }
 
-/** Scraped alle Layer (oder nur `only`, falls angegeben) vom WFS nach data/raw. */
+/** Scrapes all layers (or only `only`, when given) from the WFS into data/raw. */
 export async function scrapeAll(only?: string): Promise<void> {
   mkdirSync(DATA_RAW, { recursive: true });
   for (const l of LAYERS) {
@@ -60,7 +60,7 @@ export async function scrapeAll(only?: string): Promise<void> {
   console.log('FERTIG');
 }
 
-// Direktaufruf per `npm run scrape [-- <layer>]`
+// Direct invocation via `npm run scrape [-- <layer>]`
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   scrapeAll(process.argv[2]).catch((e) => { console.error('Fehler:', e); process.exit(1); });
 }
