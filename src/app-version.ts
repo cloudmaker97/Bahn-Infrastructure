@@ -1,12 +1,12 @@
-// Ermittelt die anzuzeigende Software-Version einmalig beim Start.
-// Verantwortung: Versionsauflösung (SRP). Auto-inkrementierend über die Git-Commit-
-// Anzahl (steigt bei jedem neuen Commit/Release von selbst), mit sauberen Fallbacks.
+// Resolves the displayed software version once at startup.
+// Responsibility: version resolution (SRP). Auto-incrementing via the git commit
+// count (rises with every new commit/release by itself), with clean fallbacks.
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT } from './config.js';
 
-/** Liest die Basis-Version (semver) aus der package.json. */
+/** Reads the base version (semver) from package.json. */
 function packageVersion(): string {
   try {
     const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { version?: string };
@@ -16,7 +16,7 @@ function packageVersion(): string {
   }
 }
 
-/** Führt ein Git-Kommando im Projektwurzel-Verzeichnis aus (oder null). */
+/** Runs a git command in the project root (or null). */
 function git(cmd: string): string | null {
   try {
     return execSync(`git ${cmd}`, { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] })
@@ -28,10 +28,10 @@ function git(cmd: string): string | null {
 }
 
 /**
- * Baut die Versionszeichenkette:
- *  - Container/Prod: `APP_VERSION` (falls gesetzt) hat Vorrang.
- *  - Dev mit Git: `v<semver> · build <commitAnzahl> · <kurzHash>` (build steigt automatisch).
- *  - sonst: `v<semver>`.
+ * Builds the version string:
+ *  - container/prod: `APP_VERSION` (when set) takes precedence.
+ *  - dev with git: `v<semver> · build <commitCount> · <shortHash>` (build rises automatically).
+ *  - otherwise: `v<semver>`.
  */
 export function resolveVersion(): string {
   if (process.env.APP_VERSION) return process.env.APP_VERSION;

@@ -1,6 +1,6 @@
-// Selbsttest für die Live-Zug-Kernlogik (src/shared) und den LiveTripsService.
-// Komplett OFFLINE: Upstream wird über eine injizierte Fake-fetch-Funktion simuliert.
-// Laufbar mit: npx tsx src/data/live-trips.selftest.ts
+// Selftest for the live-train core logic (src/shared) and the LiveTripsService.
+// Completely OFFLINE: upstream is simulated via an injected fake fetch function.
+// Run with: npx tsx src/data/live-trips.selftest.ts
 import assert from 'node:assert';
 import { decodePolyline, type LatLon } from '../shared/polyline.js';
 import { buildTrack, positionAt, type Ring } from '../shared/geo.js';
@@ -8,10 +8,10 @@ import { isRailMode, categoryOf, normalizeTrips } from '../shared/live-trips-cor
 import { DE_BOUNDARY_RINGS } from '../shared/de-boundary.js';
 import { LiveTripsService } from './live-trips-service.js';
 
-// --- Test-Helfer: Google-Encoded-Polyline KODIEREN (Umkehrung von decodePolyline) ---
+// --- Test helper: ENCODE a Google encoded polyline (inverse of decodePolyline) ---
 function encodePolyline(points: LatLon[], precision = 5): string {
   const f = Math.pow(10, precision);
-  const encodeWert = (v: number): string => {
+  const encodeValue = (v: number): string => {
     let n = v < 0 ? ~(v << 1) : v << 1;
     let s = '';
     while (n >= 0x20) {
@@ -26,69 +26,69 @@ function encodePolyline(points: LatLon[], precision = 5): string {
   for (const [lat, lon] of points) {
     const latE = Math.round(lat * f);
     const lonE = Math.round(lon * f);
-    out += encodeWert(latE - prevLat) + encodeWert(lonE - prevLon);
+    out += encodeValue(latE - prevLat) + encodeValue(lonE - prevLon);
     prevLat = latE;
     prevLon = lonE;
   }
   return out;
 }
 
-/** Vergleicht zwei Zahlen mit Toleranz. */
-function nahe(ist: number, soll: number, tol: number, msg: string): void {
-  assert.ok(Math.abs(ist - soll) < tol, `${msg}: ist=${ist}, soll=${soll}`);
+/** Compares two numbers with a tolerance. */
+function near(actual: number, expected: number, tol: number, msg: string): void {
+  assert.ok(Math.abs(actual - expected) < tol, `${msg}: actual=${actual}, expected=${expected}`);
 }
 
-// --- a) decodePolyline: offizieller Google-Testvektor ---
+// --- a) decodePolyline: official Google test vector ---
 {
   const pts = decodePolyline('_p~iF~ps|U_ulLnnqC_mqNvxq`@');
-  assert.strictEqual(pts.length, 3, `Testvektor: ${pts.length} Punkte`);
-  const soll: LatLon[] = [
+  assert.strictEqual(pts.length, 3, `test vector: ${pts.length} points`);
+  const expected: LatLon[] = [
     [38.5, -120.2],
     [40.7, -120.95],
     [43.252, -126.453],
   ];
-  for (let i = 0; i < soll.length; i++) {
-    nahe(pts[i]![0], soll[i]![0], 1e-6, `Punkt ${i} lat`);
-    nahe(pts[i]![1], soll[i]![1], 1e-6, `Punkt ${i} lon`);
+  for (let i = 0; i < expected.length; i++) {
+    near(pts[i]![0], expected[i]![0], 1e-6, `point ${i} lat`);
+    near(pts[i]![1], expected[i]![1], 1e-6, `point ${i} lon`);
   }
-  // Roundtrip: der Selftest-Encoder muss die Umkehrung des Decoders sein.
-  assert.strictEqual(encodePolyline(soll), '_p~iF~ps|U_ulLnnqC_mqNvxq`@', 'Encoder trifft den Testvektor');
-  const rt = decodePolyline(encodePolyline(soll));
-  for (let i = 0; i < soll.length; i++) {
-    nahe(rt[i]![0], soll[i]![0], 1e-5, `Roundtrip ${i} lat`);
-    nahe(rt[i]![1], soll[i]![1], 1e-5, `Roundtrip ${i} lon`);
+  // Roundtrip: the selftest encoder must be the inverse of the decoder.
+  assert.strictEqual(encodePolyline(expected), '_p~iF~ps|U_ulLnnqC_mqNvxq`@', 'encoder hits the test vector');
+  const rt = decodePolyline(encodePolyline(expected));
+  for (let i = 0; i < expected.length; i++) {
+    near(rt[i]![0], expected[i]![0], 1e-5, `roundtrip ${i} lat`);
+    near(rt[i]![1], expected[i]![1], 1e-5, `roundtrip ${i} lon`);
   }
 }
 
-// --- b) buildTrack/positionAt: Interpolation + Klemmung ---
+// --- b) buildTrack/positionAt: interpolation + clamping ---
 {
   const track = buildTrack([
     [0, 0],
     [0, 10],
   ]);
-  nahe(track.total, 10, 1e-9, 'Gesamtlänge');
-  assert.deepStrictEqual(positionAt(track, 0), [0, 0], 'frac=0 -> Start');
-  const mitte = positionAt(track, 0.5)!;
-  nahe(mitte[0], 0, 1e-9, 'frac=0.5 lat');
-  nahe(mitte[1], 5, 1e-9, 'frac=0.5 lon');
-  assert.deepStrictEqual(positionAt(track, 1), [0, 10], 'frac=1 -> Ende');
-  // Klemmung auf [0, 1].
-  assert.deepStrictEqual(positionAt(track, -0.5), [0, 0], 'frac<0 -> Start');
-  assert.deepStrictEqual(positionAt(track, 1.5), [0, 10], 'frac>1 -> Ende');
+  near(track.total, 10, 1e-9, 'total length');
+  assert.deepStrictEqual(positionAt(track, 0), [0, 0], 'frac=0 -> start');
+  const middle = positionAt(track, 0.5)!;
+  near(middle[0], 0, 1e-9, 'frac=0.5 lat');
+  near(middle[1], 5, 1e-9, 'frac=0.5 lon');
+  assert.deepStrictEqual(positionAt(track, 1), [0, 10], 'frac=1 -> end');
+  // Clamping to [0, 1].
+  assert.deepStrictEqual(positionAt(track, -0.5), [0, 0], 'frac<0 -> start');
+  assert.deepStrictEqual(positionAt(track, 1.5), [0, 10], 'frac>1 -> end');
 }
 
 // --- c) isRailMode/categoryOf ---
 {
-  assert.strictEqual(isRailMode('HIGHSPEED_RAIL'), true, 'HIGHSPEED_RAIL ist Eisenbahn');
-  assert.strictEqual(categoryOf('HIGHSPEED_RAIL'), 'fern', 'HIGHSPEED_RAIL -> fern');
-  assert.strictEqual(isRailMode('SUBURBAN'), true, 'SUBURBAN ist Eisenbahn');
-  assert.strictEqual(categoryOf('SUBURBAN'), 'sbahn', 'SUBURBAN -> sbahn');
-  assert.strictEqual(isRailMode('BUS'), false, 'BUS ist keine Eisenbahn');
+  assert.strictEqual(isRailMode('HIGHSPEED_RAIL'), true, 'HIGHSPEED_RAIL is railway');
+  assert.strictEqual(categoryOf('HIGHSPEED_RAIL'), 'long-distance', 'HIGHSPEED_RAIL -> long-distance');
+  assert.strictEqual(isRailMode('SUBURBAN'), true, 'SUBURBAN is railway');
+  assert.strictEqual(categoryOf('SUBURBAN'), 'suburban', 'SUBURBAN -> suburban');
+  assert.strictEqual(isRailMode('BUS'), false, 'BUS is not railway');
 }
 
-// --- d) normalizeTrips: Filter (Modus, Zeiten, Polyline) + DE-Grenzfilter ---
+// --- d) normalizeTrips: filters (mode, times, polyline) + DE boundary filter ---
 {
-  // Fahrweg mit 2 Punkten in Deutschland; now = Fahrt-Mitte -> Position ~[52.35, 10.2].
+  // Track with 2 points in Germany; now = mid-journey -> position ~[52.35, 10.2].
   const polyDe = encodePolyline([
     [52.4, 10.7],
     [52.3, 9.7],
@@ -96,9 +96,9 @@ function nahe(ist: number, soll: number, tol: number, msg: string): void {
   const nowMs = Date.parse('2026-07-09T12:00:00Z');
   const departMs = nowMs - 10 * 60_000;
   const arriveMs = nowMs + 10 * 60_000;
-  const schedDepartMs = departMs - 3 * 60_000; // 3 min verspätet abgefahren
+  const schedDepartMs = departMs - 3 * 60_000; // departed 3 min late
 
-  const gueltig = {
+  const valid = {
     mode: 'HIGHSPEED_RAIL',
     departure: new Date(departMs).toISOString(),
     arrival: new Date(arriveMs).toISOString(),
@@ -111,25 +111,25 @@ function nahe(ist: number, soll: number, tol: number, msg: string): void {
     trips: [{ tripId: 'trip-1', displayName: 'ICE 123' }],
   };
   const fixture = [
-    { ...gueltig, mode: 'BUS' }, // kein Eisenbahn-Modus -> raus
-    gueltig, // bleibt
-    { ...gueltig, arrival: gueltig.departure }, // arrival <= departure -> raus
-    { ...gueltig, polyline: '' }, // leere Polyline -> raus
+    { ...valid, mode: 'BUS' }, // not a railway mode -> dropped
+    valid, // kept
+    { ...valid, arrival: valid.departure }, // arrival <= departure -> dropped
+    { ...valid, polyline: '' }, // empty polyline -> dropped
   ];
 
   const trains = normalizeTrips(fixture, nowMs, DE_BOUNDARY_RINGS);
-  assert.strictEqual(trains.length, 1, `normalizeTrips: ${trains.length} statt 1`);
+  assert.strictEqual(trains.length, 1, `normalizeTrips: ${trains.length} instead of 1`);
   const t = trains[0]!;
-  assert.strictEqual(t.name, 'ICE 123', 'Anzeigename aus trips[0]');
-  assert.strictEqual(t.category, 'fern', 'Kategorie fern');
+  assert.strictEqual(t.name, 'ICE 123', 'display name from trips[0]');
+  assert.strictEqual(t.category, 'long-distance', 'category long-distance');
   assert.strictEqual(t.delayMin, 3, `delayMin: ${t.delayMin}`);
-  assert.strictEqual(t.realTime, true, 'realTime übernommen');
-  assert.strictEqual(t.polyline, polyDe, 'Polyline bleibt kodiert');
+  assert.strictEqual(t.realTime, true, 'realTime carried over');
+  assert.strictEqual(t.polyline, polyDe, 'polyline stays encoded');
   assert.strictEqual(t.fromName, 'Wolfsburg Hbf');
   assert.strictEqual(t.toName, 'Hannover Hbf');
 
-  // Grenzfilter: mit einem Quadrat-Ring weit weg (um [0, 0]) fliegt der Zug raus.
-  const fernerRing: Ring[] = [
+  // Boundary filter: with a square ring far away (around [0, 0]) the train is dropped.
+  const farRing: Ring[] = [
     [
       [-1, -1],
       [1, -1],
@@ -138,10 +138,10 @@ function nahe(ist: number, soll: number, tol: number, msg: string): void {
       [-1, -1],
     ],
   ];
-  assert.strictEqual(normalizeTrips(fixture, nowMs, fernerRing).length, 0, 'Position außerhalb -> raus');
+  assert.strictEqual(normalizeTrips(fixture, nowMs, farRing).length, 0, 'position outside -> dropped');
 }
 
-// --- e) LiveTripsService: Fake-fetch (Cache je Bucket, Fehlerpfad, DE-Bbox in der URL) ---
+// --- e) LiveTripsService: fake fetch (cache per bucket, error path, DE bbox in the URL) ---
 {
   const nowMs = Date.now();
   const segment = {
@@ -170,68 +170,68 @@ function nahe(ist: number, soll: number, tol: number, msg: string): void {
 
   const svc = new LiveTripsService({ fetchFn: fakeFetch });
   const r1 = await svc.getTrains(6);
-  assert.strictEqual(r1.error, null, `error muss null sein: ${r1.error}`);
-  assert.strictEqual(r1.trains.length, 1, `Service: ${r1.trains.length} Züge statt 1`);
-  assert.strictEqual(urls.length, 1, 'genau 1 Upstream-Call');
+  assert.strictEqual(r1.error, null, `error must be null: ${r1.error}`);
+  assert.strictEqual(r1.trains.length, 1, `service: ${r1.trains.length} trains instead of 1`);
+  assert.strictEqual(urls.length, 1, 'exactly 1 upstream call');
 
-  // Burst-Cache: sofortiger zweiter Aufruf desselben Buckets -> KEIN weiterer Upstream-Call.
+  // Burst cache: an immediate second call for the same bucket -> NO further upstream call.
   const r2 = await svc.getTrains(6);
-  assert.strictEqual(urls.length, 1, 'Cache-Treffer: weiterhin 1 Upstream-Call');
-  assert.strictEqual(r2, r1, 'Cache liefert dasselbe Ergebnisobjekt');
+  assert.strictEqual(urls.length, 1, 'cache hit: still 1 upstream call');
+  assert.strictEqual(r2, r1, 'the cache returns the same result object');
 
-  // Anderer Zoom-Bucket -> eigener Cache-Eintrag -> zweiter Upstream-Call.
+  // Different zoom bucket -> own cache entry -> second upstream call.
   await svc.getTrains(7);
-  assert.strictEqual(urls.length, 2, 'anderer Bucket: 2. Upstream-Call');
+  assert.strictEqual(urls.length, 2, 'different bucket: 2nd upstream call');
 
-  // Zoom-Klemmung: 20 -> Bucket 8 (Transitous: 422 bei DE-Bbox und zoom > 8).
+  // Zoom clamping: 20 -> bucket 8 (Transitous: 422 for the DE bbox and zoom > 8).
   await svc.getTrains(20);
-  assert.strictEqual(urls.length, 3, 'geklemmter Bucket: 3. Upstream-Call');
-  assert.strictEqual(new URL(urls[2]!).searchParams.get('zoom'), '8', 'zoom auf 8 geklemmt');
-  // 9 klemmt ebenfalls auf 8 -> Cache-Treffer, kein weiterer Upstream-Call.
+  assert.strictEqual(urls.length, 3, 'clamped bucket: 3rd upstream call');
+  assert.strictEqual(new URL(urls[2]!).searchParams.get('zoom'), '8', 'zoom clamped to 8');
+  // 9 also clamps to 8 -> cache hit, no further upstream call.
   await svc.getTrains(9);
-  assert.strictEqual(urls.length, 3, 'zoom 9 -> Bucket 8 aus dem Cache');
+  assert.strictEqual(urls.length, 3, 'zoom 9 -> bucket 8 from the cache');
 
-  // URL enthält die Deutschland-Bbox (min~47.2,5.8; max~55.1,15.1) + Bucket.
+  // The URL contains the Germany bbox (min~47.2,5.8; max~55.1,15.1) + bucket.
   const u = new URL(urls[0]!);
-  assert.strictEqual(u.searchParams.get('zoom'), '6', 'zoom=6 in der URL');
+  assert.strictEqual(u.searchParams.get('zoom'), '6', 'zoom=6 in the URL');
   const min = (u.searchParams.get('min') ?? '').split(',').map(Number);
   const max = (u.searchParams.get('max') ?? '').split(',').map(Number);
   assert.strictEqual(min.length, 2, 'min=lat,lon');
   assert.strictEqual(max.length, 2, 'max=lat,lon');
-  nahe(min[0]!, 47.2, 0.3, 'min lat (DE-Süd)');
-  nahe(min[1]!, 5.8, 0.3, 'min lon (DE-West)');
-  nahe(max[0]!, 55.1, 0.3, 'max lat (DE-Nord)');
-  nahe(max[1]!, 15.1, 0.3, 'max lon (DE-Ost)');
-  assert.ok(u.searchParams.get('startTime'), 'startTime gesetzt');
-  assert.ok(u.searchParams.get('endTime'), 'endTime gesetzt');
+  near(min[0]!, 47.2, 0.3, 'min lat (DE south)');
+  near(min[1]!, 5.8, 0.3, 'min lon (DE west)');
+  near(max[0]!, 55.1, 0.3, 'max lat (DE north)');
+  near(max[1]!, 15.1, 0.3, 'max lon (DE east)');
+  assert.ok(u.searchParams.get('startTime'), 'startTime set');
+  assert.ok(u.searchParams.get('endTime'), 'endTime set');
 
-  // Fehlerpfad: ttlMs=0 (Cache aus) + werfender fetch -> error gesetzt, trains leer, KEIN throw.
-  const kaputt = (async () => {
+  // Error path: ttlMs=0 (cache off) + throwing fetch -> error set, trains empty, NO throw.
+  const broken = (async () => {
     throw new Error('Netz weg');
   }) as unknown as typeof fetch;
-  const svcFehler = new LiveTripsService({ ttlMs: 0, fetchFn: kaputt });
-  const rf = await svcFehler.getTrains(6);
-  assert.deepStrictEqual(rf.trains, [], 'Fehlerfall: keine Züge');
-  assert.ok(rf.error && rf.error.includes('Netz weg'), `Fehlertext erwartet: ${rf.error}`);
+  const svcError = new LiveTripsService({ ttlMs: 0, fetchFn: broken });
+  const rf = await svcError.getTrains(6);
+  assert.deepStrictEqual(rf.trains, [], 'error case: no trains');
+  assert.ok(rf.error && rf.error.includes('Netz weg'), `error text expected: ${rf.error}`);
 
-  // Negatives Caching: auch Fehler-Ergebnisse halten den Burst-Schutz aufrecht.
+  // Negative caching: error results keep the burst protection alive too.
   {
     let calls = 0;
-    const immerKaputt = (async () => {
+    const alwaysBroken = (async () => {
       calls++;
       throw new Error('Upstream down');
     }) as unknown as typeof fetch;
-    const svcNeg = new LiveTripsService({ ttlMs: 60_000, fetchFn: immerKaputt });
+    const svcNeg = new LiveTripsService({ ttlMs: 60_000, fetchFn: alwaysBroken });
     const e1 = await svcNeg.getTrains(6);
     const e2 = await svcNeg.getTrains(6);
-    assert.strictEqual(calls, 1, 'negatives Caching: nur 1 Upstream-Call trotz 2 Anfragen');
-    assert.ok(e1.error && e2.error, 'beide Antworten tragen den Fehler');
+    assert.strictEqual(calls, 1, 'negative caching: only 1 upstream call despite 2 requests');
+    assert.ok(e1.error && e2.error, 'both responses carry the error');
   }
 
-  // Single-Flight: parallele Anfragen desselben Buckets teilen sich EINEN Upstream-Call.
+  // Single flight: parallel requests for the same bucket share ONE upstream call.
   {
     let calls = 0;
-    const langsam = (async () => {
+    const slow = (async () => {
       calls++;
       await new Promise((f) => setTimeout(f, 25));
       return new Response(JSON.stringify([segment]), {
@@ -239,10 +239,10 @@ function nahe(ist: number, soll: number, tol: number, msg: string): void {
         headers: { 'Content-Type': 'application/json' },
       });
     }) as unknown as typeof fetch;
-    const svcSf = new LiveTripsService({ fetchFn: langsam });
+    const svcSf = new LiveTripsService({ fetchFn: slow });
     const [p1, p2] = await Promise.all([svcSf.getTrains(6), svcSf.getTrains(6)]);
-    assert.strictEqual(calls, 1, 'Single-Flight: 1 Upstream-Call für 2 parallele Anfragen');
-    assert.strictEqual(p1, p2, 'beide Aufrufer erhalten dasselbe Ergebnisobjekt');
+    assert.strictEqual(calls, 1, 'single flight: 1 upstream call for 2 parallel requests');
+    assert.strictEqual(p1, p2, 'both callers receive the same result object');
   }
 }
 

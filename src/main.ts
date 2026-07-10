@@ -1,17 +1,18 @@
-// Composition Root: erzeugt und verdrahtet alle Komponenten (Dependency Injection).
+// Composition root: creates and wires all components (dependency injection).
+// Log and notice strings are user-facing and intentionally German (product language).
 import { exec } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { PORT, WEB_OUT, DATA_WEB, STRECKENINFO_API, STRECKENINFO_WS, STRECKENINFO_TTL_MS } from './config.js';
+import { PORT, WEB_OUT, DATA_WEB, NETWORK_STATUS_API, NETWORK_STATUS_WS, NETWORK_STATUS_TTL_MS } from './config.js';
 import { ensureData } from './ensure-data.js';
 import { scrapeAll } from './scrape.js';
 import { buildMapData } from './build-map-data.js';
 import { resolveVersion } from './app-version.js';
 import { ReloadableIsrData } from './data/reloadable-isr-data.js';
-import { StreckenInfoService } from './data/streckeninfo.js';
+import { NetworkStatusService } from './data/network-status/service.js';
 import { LiveTripsService } from './data/live-trips-service.js';
 import { RouteService } from './routing/route-service.js';
-import { VerlaufResolver } from './routing/verlauf-resolver.js';
+import { AlignmentResolver } from './routing/alignment-resolver.js';
 import { ApiRouter } from './server/api-router.js';
 import { SseHub } from './server/sse-hub.js';
 import { StaticFileHandler } from './server/static-file-handler.js';
@@ -20,7 +21,7 @@ import { TuiApp } from './tui/tui-app.js';
 import { TuiRenderer } from './tui/tui-renderer.js';
 import { InputHandler } from './tui/input-handler.js';
 
-/** Oeffnet eine URL im System-Standardbrowser (plattformabhaengig). */
+/** Opens a URL in the system default browser (platform-dependent). */
 function openInBrowser(target: string): void {
   const cmd = process.platform === 'win32' ? `start "" "${target}"`
     : process.platform === 'darwin' ? `open "${target}"`
@@ -39,47 +40,55 @@ const data = new ReloadableIsrData();
     `${s.rl100.toLocaleString('de-DE')} RL100 · ${s.objects.toLocaleString('de-DE')} durchsuchbare Objekte`);
 }
 
-// Routing + HTTP verdrahten (ueber die stabilen, reload-faehigen Proxies)
+// Wire routing + HTTP (via the stable, reload-capable proxies).
 const routeService = new RouteService(data.pathfinder, data.stations);
 const sseHub = new SseHub();
-// Meldungen folgen dem realen Streckenverlauf statt der Luftlinie.
-const verlaufResolver = new VerlaufResolver(data.pathfinder, data.stations);
-const streckeninfo = new StreckenInfoService(data.stations, {
-  apiBase: STRECKENINFO_API,
-  wsUrl: STRECKENINFO_WS,
-  ttlMs: STRECKENINFO_TTL_MS,
+// Notices follow the real track alignment instead of straight lines.
+const alignmentResolver = new AlignmentResolver(data.pathfinder, data.stations);
+const networkStatus = new NetworkStatusService(data.stations, {
+  apiBase: NETWORK_STATUS_API,
+  wsUrl: NETWORK_STATUS_WS,
+  ttlMs: NETWORK_STATUS_TTL_MS,
   onRefresh: () => sseHub.broadcast('streckeninfo'),
-  verlauf: verlaufResolver.resolve,
+  alignment: alignmentResolver.resolve,
 });
 const liveTrips = new LiveTripsService();
-const apiRouter = new ApiRouter(routeService, data.stations, data.search, streckeninfo, liveTrips, sseHub, resolveVersion());
-// Frontend = statischer Next.js-Export; fehlt er, laufen APIs/TUI trotzdem.
+const apiRouter = new ApiRouter({
+  routes: routeService,
+  suggester: data.stations,
+  search: data.search,
+  networkStatus,
+  liveTrips,
+  sse: sseHub,
+  version: resolveVersion(),
+});
+// Frontend = static Next.js export; when missing, the APIs/TUI still work.
 if (!existsSync(join(WEB_OUT, 'index.html'))) {
   console.warn('Hinweis: web/out fehlt – Frontend zuerst mit `npm run build:web` bauen.');
 }
 const staticFiles = new StaticFileHandler(WEB_OUT, DATA_WEB);
 const httpServer = new HttpServer(PORT, apiRouter, staticFiles);
-const boundPort = await httpServer.listen();     // PORT=0 -> vom OS vergebener freier Port
+const boundPort = await httpServer.listen();     // PORT=0 -> OS-assigned free port
 const url = `http://localhost:${boundPort}/`;
 console.log(`Server läuft auf ${url}`);
 
 function shutdown(): void { httpServer.close(); process.exit(0); }
 
-// Container/Dienst-Stopp (Coolify/Docker senden SIGTERM) sauber behandeln.
+// Handle container/service stop cleanly (Coolify/Docker send SIGTERM).
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
-// Headless-Modus (Server ohne interaktive TUI): explizit via HEADLESS=1 oder
-// automatisch, wenn kein TTY vorhanden ist (typisch im Container).
+// Headless mode (server without the interactive TUI): explicitly via HEADLESS=1
+// or automatically when no TTY is present (typical inside a container).
 const HEADLESS = process.env.HEADLESS === '1' || process.env.HEADLESS === 'true' || !process.stdin.isTTY;
 
-/** Vollstaendiger Daten-Refresh: Rohdaten neu scrapen, Web-GeoJSON neu bauen, IsrData neu laden. */
+/** Full data refresh: re-scrape raw data, rebuild web GeoJSON, reload IsrData. */
 async function refreshData(): Promise<string> {
   await scrapeAll();
   buildMapData();
   data.reload();
-  verlaufResolver.leereCache(); // Graph/Geometrien koennten sich geaendert haben
-  streckeninfo.invalidate();    // gecachtes GeoJSON basiert noch auf dem alten Graphen
+  alignmentResolver.clearCache(); // graph/geometries may have changed
+  networkStatus.invalidate();     // the cached GeoJSON was built on the old graph
   const s = data.stats;
   return `${s.objects.toLocaleString('de-DE')} Objekte · ${s.rl100.toLocaleString('de-DE')} RL100 · ${s.edges.toLocaleString('de-DE')} Kanten`;
 }
@@ -87,7 +96,7 @@ async function refreshData(): Promise<string> {
 if (HEADLESS) {
   console.log('Headless-Modus: interaktive TUI deaktiviert – nur HTTP-Server läuft.');
 } else {
-  const tui = new TuiApp(data.search, new TuiRenderer(data.abschnitte), new InputHandler(), streckeninfo, {
+  const tui = new TuiApp(data.search, new TuiRenderer(data.sections), new InputHandler(), networkStatus, {
     getContext: () => ({ url, requestCount: httpServer.requestCount, totalObjects: data.totalObjects }),
     onOpenBrowser: () => openInBrowser(url),
     onRefreshData: refreshData,

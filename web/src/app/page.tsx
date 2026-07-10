@@ -1,7 +1,7 @@
 'use client';
 
-// Einstiegsseite: lädt die Kartenanwendung ohne SSR – MapLibre braucht `window`,
-// daher dynamic import mit ssr:false (nur in Client-Komponenten erlaubt).
+// Entry page: loads the map application without SSR – MapLibre needs `window`,
+// hence the dynamic import with ssr:false (only allowed in client components).
 import dynamic from 'next/dynamic';
 
 const MapApp = dynamic(() => import('@/components/MapApp'), { ssr: false });

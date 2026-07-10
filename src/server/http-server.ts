@@ -1,5 +1,5 @@
-// HTTP-Server: nimmt Requests an und delegiert an ApiRouter bzw. StaticFileHandler.
-// Verantwortung: HTTP-Transport + Delegation (SRP).
+// HTTP server: accepts requests and delegates to ApiRouter or StaticFileHandler.
+// Responsibility: HTTP transport + delegation (SRP).
 import { createServer, type Server } from 'node:http';
 import type { ApiRouter } from './api-router.js';
 import type { StaticFileHandler } from './static-file-handler.js';
@@ -22,7 +22,7 @@ export class HttpServer {
     });
   }
 
-  /** Startet den Server; loest mit dem tatsaechlich gebundenen Port auf (bei port=0 vom OS vergeben). */
+  /** Starts the server; resolves with the actually bound port (OS-assigned for port=0). */
   listen(): Promise<number> {
     return new Promise((resolve) => {
       this.server.listen(this.port, () => {
@@ -34,6 +34,6 @@ export class HttpServer {
   }
   close(): void { this.server.close(); }
   get requestCount(): number { return this.requests; }
-  /** Tatsaechlich gebundener Port (erst nach listen() gueltig). */
+  /** Actually bound port (valid only after listen()). */
   get boundPort(): number { return this._boundPort; }
 }

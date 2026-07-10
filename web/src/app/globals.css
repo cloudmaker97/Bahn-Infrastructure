@@ -1,4 +1,4 @@
-/* Dark-Mode. Ruhige, augenschonende dunkle Palette (portiert aus dem Alt-Frontend).
+/* Dark mode. Calm, easy-on-the-eyes dark palette (ported from the old frontend).
    WICHTIG: Kein CSS-Invert-Filter auf der Karte – das CARTO-Basemap ist nativ dunkel. */
 :root {
   --panel:#161b22; --txt:#e6edf3; --muted:#9aa7b4; --accent:#4a9eff;
@@ -9,7 +9,7 @@
 html,body { margin:0; height:100%; overflow:hidden;
   font-family:system-ui,Segoe UI,Roboto,sans-serif; color:var(--txt); }
 
-/* Karte füllt immer den kompletten Viewport – auch bei kleinen/mobilen Viewports.
+/* The map always fills the whole viewport – also on small/mobile viewports.
    100dvh berücksichtigt dynamische Browser-Leisten; 100vh als Fallback. */
 #map {
   position:fixed; inset:0;
@@ -17,7 +17,7 @@ html,body { margin:0; height:100%; overflow:hidden;
   background:#0b0f14;
 }
 
-/* Linke Seitenleiste: am Bildschirmrand angedockt (volle Höhe, bündig, ohne Header). */
+/* Left side panel: docked to the screen edge (full height, flush, no header). */
 .panel {
   position:fixed; z-index:1000; top:0; left:0; bottom:0; width:320px;
   max-width:calc(100vw - 52px);
@@ -47,7 +47,7 @@ html,body { margin:0; height:100%; overflow:hidden;
 .note { font-size:11px; color:var(--muted); margin-top:10px; line-height:1.4; }
 .hint { font-size:11px; color:var(--muted); margin-top:10px; line-height:1.4; }
 
-/* Legende + Statuszeilen im linken Panel */
+/* Legend + status lines in the left panel */
 .legend { margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }
 .legend .item { display:flex; align-items:center; gap:8px; margin:5px 0; font-size:12px; }
 .legend .swatch { width:22px; height:4px; border-radius:2px; flex:none; }
@@ -55,14 +55,14 @@ html,body { margin:0; height:100%; overflow:hidden;
 .status-line { font-size:11px; color:var(--muted); margin-top:6px; }
 .status .err, .err { color:var(--danger); }
 
-/* Fortschrittsbalken beim Laden der Kartendaten */
+/* Progress bar while loading the map data */
 .bar { height:6px; background:var(--field); border:1px solid var(--field-border);
   border-radius:4px; overflow:hidden; margin-bottom:5px; }
 .bar-fill { height:100%; width:0; background:var(--accent); border-radius:4px; transition:width .12s linear; }
 .bar.indet .bar-fill { width:40%; animation:barIndet 1.1s infinite ease-in-out; }
 @keyframes barIndet { 0%{margin-left:-40%} 100%{margin-left:100%} }
 
-/* Routing-Ergebnis (Block folgt im nächsten Schritt; Stile schon portiert) */
+/* Routing result block */
 .routing { margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }
 .route-result { margin-top:10px; font-size:12px; }
 .route-result .summary { background:var(--ok-bg); border:1px solid #1f5a3d; border-radius:8px; padding:10px; margin-bottom:8px; }
@@ -73,7 +73,7 @@ html,body { margin:0; height:100%; overflow:hidden;
 .route-result .wp .rl { color:var(--accent); font-weight:600; }
 .route-result .err { color:var(--danger); }
 
-/* Ebenen-Steuerung (eigenes Control oben rechts, Panel-Optik) */
+/* Layer control (own control at the top right, panel look) */
 .layerctl {
   position:fixed; z-index:1000; top:10px; right:10px;
   max-height:calc(100dvh - 24px); overflow-y:auto;
@@ -82,13 +82,13 @@ html,body { margin:0; height:100%; overflow:hidden;
   box-shadow:0 2px 12px rgba(0,0,0,.45);
 }
 .layerctl label { display:flex; align-items:center; gap:6px; margin:3px 0; cursor:pointer; }
-/* Eingerückte Unter-Filter (z. B. „Nur Echtzeit" unter Live-Züge) */
+/* Indented sub-filters (e.g. "Nur Echtzeit" under Live-Züge) */
 .layerctl label.lc-indent { padding-left:22px; }
 .lc-sub { color:var(--muted); }
-/* Trennlinie zwischen Eintrags-Gruppen (Live/Streckeninfo vs. ISR-Overlays) */
+/* Divider between entry groups (live/network status vs. ISR overlays) */
 .layerctl hr.lc-sep { border:none; border-top:1px solid var(--border); margin:6px 0; }
 
-/* Rechtsklick-Auswahl überlappender Elemente (Nearby-Liste) */
+/* Right-click selection of overlapping elements (nearby list) */
 .nearby { width:250px; max-width:100%; }
 .nearby b { display:block; margin:0 0 8px; font-size:12px; }
 .nearby-item { display:flex; align-items:flex-start; gap:8px; padding:6px 6px; cursor:pointer;
@@ -96,22 +96,22 @@ html,body { margin:0; height:100%; overflow:hidden;
 .nearby-item:last-child { border-bottom:none; }
 .nearby-item:hover { background:var(--field); }
 .nearby-item .dot { width:9px; height:9px; border-radius:50%; flex:none; margin-top:3px; border:1px solid rgba(255,255,255,.5); }
-/* min-width:0 erlaubt das Schrumpfen des Flex-Kinds -> Text bricht um statt horizontal zu scrollen */
+/* min-width:0 lets the flex child shrink -> text wraps instead of scrolling horizontally */
 .nearby-item .txt { min-width:0; flex:1; }
 .nearby-item .kind { display:block; color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.03em; }
 .nearby-item .label { display:block; overflow-wrap:anywhere; line-height:1.3; }
 
-/* Sammelmeldungen-Box unten im linken Panel (ein-/ausklappbar) */
-.sammel { margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }
-.sammel summary { cursor:pointer; font-size:11px; color:var(--muted);
+/* Aggregate-notices box at the bottom of the left panel (collapsible) */
+.notices { margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }
+.notices summary { cursor:pointer; font-size:11px; color:var(--muted);
   text-transform:uppercase; letter-spacing:.04em; font-weight:600; }
-.sammel .list { max-height:220px; overflow:auto; margin-top:8px; }
-.sammel .item { padding:6px 0; border-bottom:1px solid var(--border); }
-.sammel .titel { font-weight:600; }
-.sammel .text { color:var(--muted); margin-top:2px; line-height:1.35; }
-.sammel .zeit { color:var(--muted); font-size:11px; margin-top:2px; }
+.notices .list { max-height:220px; overflow:auto; margin-top:8px; }
+.notices .item { padding:6px 0; border-bottom:1px solid var(--border); }
+.notices .title { font-weight:600; }
+.notices .text { color:var(--muted); margin-top:2px; line-height:1.35; }
+.notices .period { color:var(--muted); font-size:11px; margin-top:2px; }
 
-/* Software-Version unten rechts (über der Karten-Attribution) */
+/* Software version at the bottom right (above the map attribution) */
 .version {
   position:fixed; z-index:1000; right:8px; bottom:22px;
   font-size:10px; color:var(--muted); font-variant-numeric:tabular-nums;
@@ -121,7 +121,7 @@ html,body { margin:0; height:100%; overflow:hidden;
 a { color:var(--accent); }
 code { background:var(--field); padding:1px 4px; border-radius:4px; font-size:11px; }
 
-/* ---- Dark-Mode-Overrides für MapLibre-Bedienelemente ---- */
+/* ---- Dark-mode overrides for the MapLibre controls ---- */
 .maplibregl-map { background:#0b0f14; }
 .maplibregl-popup-content {
   background:var(--panel); color:var(--txt); border:1px solid var(--border);
@@ -134,7 +134,7 @@ code { background:var(--field); padding:1px 4px; border-radius:4px; font-size:11
 .maplibregl-popup-content td.k { color:var(--muted); white-space:nowrap; font-weight:600; }
 .maplibregl-popup-close-button { color:var(--muted); font-size:16px; }
 .maplibregl-popup-close-button:hover { color:var(--txt); background:transparent; }
-/* Popup-Pfeilspitze je Ankerrichtung einfärben (CSS-Dreieck über border-color) */
+/* Tint the popup arrow per anchor direction (CSS triangle via border-color) */
 .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
 .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
 .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip { border-top-color:var(--panel); }
@@ -143,16 +143,16 @@ code { background:var(--field); padding:1px 4px; border-radius:4px; font-size:11
 .maplibregl-popup-anchor-top-right .maplibregl-popup-tip { border-bottom-color:var(--panel); }
 .maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color:var(--panel); }
 .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color:var(--panel); }
-/* Bedien-Buttons (Zoom u. Ä.) dunkel */
+/* Control buttons (zoom etc.) dark */
 .maplibregl-ctrl-group { background:var(--panel); border:1px solid var(--border); }
 .maplibregl-ctrl-group button { background:var(--panel); }
 .maplibregl-ctrl-group button + button { border-top:1px solid var(--border); }
 .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter:invert(0.85); }
-/* Attribution unten rechts dunkel */
+/* Attribution at the bottom right dark */
 .maplibregl-ctrl-attrib { background:rgba(22,27,34,.85) !important; color:var(--muted); }
 .maplibregl-ctrl-attrib a { color:var(--accent); }
 
-/* Responsive: auf schmalen Viewports schmaler andocken */
+/* Responsive: dock narrower on small viewports */
 @media (max-width:640px) {
   .panel { width:min(320px, 86vw); }
 }

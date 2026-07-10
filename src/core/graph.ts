@@ -1,5 +1,5 @@
-// Streckennetz-Graph mit Dijkstra. Verantwortung: Graphstruktur + Pfadsuche (SRP).
-// Implementiert die Pathfinder-Abstraktion (DIP fuer den RouteService).
+// Rail-network graph with Dijkstra. Responsibility: graph structure + path search (SRP).
+// Implements the Pathfinder abstraction (DIP for the RouteService).
 import { MinHeap } from './min-heap.js';
 import type { Edge, LatLng, Pathfinder, PathResult, RouteMode } from '../types.js';
 
@@ -12,7 +12,7 @@ export class Graph implements Pathfinder {
     this.adj.get(from)!.push({ to, ...edge });
   }
 
-  /** Bidirektionale Kante (Rueckrichtung mit umgekehrter Geometrie). */
+  /** Bidirectional edge (reverse direction with reversed geometry). */
   addBidirectional(a: number, b: number, edge: Omit<Edge, 'to'>): void {
     this.addEdge(a, b, edge);
     this.addEdge(b, a, { ...edge, coords: [...edge.coords].reverse() as LatLng[] });

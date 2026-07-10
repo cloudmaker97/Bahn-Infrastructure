@@ -1,6 +1,6 @@
 'use client';
 
-// Software-Version unten rechts (aus GET /api/version), dezent über der Attribution.
+// Software version at the bottom right (from GET /api/version), subtly above the attribution.
 import { useEffect, useState } from 'react';
 import { getVersion } from '@/lib/api';
 
@@ -8,11 +8,11 @@ export default function VersionBadge() {
   const [version, setVersion] = useState('');
 
   useEffect(() => {
-    let aktiv = true;
+    let active = true;
     getVersion()
-      .then((d) => { if (aktiv && d.version) setVersion(d.version); })
-      .catch(() => { /* ohne Version einfach kein Badge */ });
-    return () => { aktiv = false; };
+      .then((d) => { if (active && d.version) setVersion(d.version); })
+      .catch(() => { /* no version -> simply no badge */ });
+    return () => { active = false; };
   }, []);
 
   if (!version) return null;

@@ -1,6 +1,6 @@
 // Verwaltet Betriebsstellen: Nachschlagen (RL100/STEL), Autocomplete.
 // Verantwortung: Betriebsstellen-Repository (SRP). Implementiert StationLookup + StationSuggester.
-import { parseLage } from '../core/geo.js';
+import { parsePosition } from '../core/geometry.js';
 import type { JsonStore } from './json-store.js';
 import type { Station, StationLookup, StationSuggester } from '../types.js';
 
@@ -14,13 +14,13 @@ export class StationRepository implements StationLookup, StationSuggester {
     for (const r of rows) {
       const stel = r['STEL_ID'] as number | undefined;
       if (stel == null || this.nodeInfo.has(stel)) continue; // Duplikate je STEL_ID ueberspringen
-      const lage = parseLage(r['ALG_GEO_LAGE']);
+      const position = parsePosition(r['ALG_GEO_LAGE']);
       const station: Station = {
         stel,
         rl100: (r['BST_RL100'] as string) || null,
         name: (r['BST_STELLE_NAME'] as string) || (r['BST_BESCHREIBUNG'] as string) || '',
-        lat: lage?.lat ?? null,
-        lon: lage?.lon ?? null,
+        lat: position?.lat ?? null,
+        lon: position?.lon ?? null,
       };
       this.nodeInfo.set(stel, station);
       if (station.rl100) {

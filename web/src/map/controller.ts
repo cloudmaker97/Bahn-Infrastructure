@@ -1,30 +1,30 @@
-// Kapselt die MapLibre-Karte hinter einer schmalen, React-freien API (SRP):
-// Karten-Setup (dunkles CARTO-Raster-Basemap), Quellen/Layer-Helfer, Popup,
-// Treffer-Abfragen und eine Event-Registry für interaktive Layer.
+// Wraps the MapLibre map behind a slim, React-free API (SRP): map setup (dark
+// CARTO raster basemap), source/layer helpers, popup, hit queries, and an event
+// registry for interactive layers.
 import maplibregl from 'maplibre-gl';
 import type {
   GeoJSONSource, LayerSpecification, LngLatLike, MapGeoJSONFeature, MapMouseEvent,
 } from 'maplibre-gl';
 
-/** Beschreibung eines interaktiven Layers (Klick-Popup + Rechtsklick-Liste). */
+/** Description of an interactive layer (click popup + right-click list). */
 export interface InteractiveSpec {
-  /** HTML (oder DOM-Knoten) für das Klick-Popup eines Features. */
+  /** HTML (or DOM node) for the click popup of a feature. */
   popupHtml(feature: MapGeoJSONFeature): string | HTMLElement;
-  /** Typ-Beschriftung (z. B. „Strecke", „Zug") für die Nearby-Auswahlliste. */
+  /** Kind caption (e.g. "Strecke", "Zug") for the nearby selection list. */
   kindLabel(feature: MapGeoJSONFeature): string;
-  /** Beschriftung des Features in der Nearby-Auswahlliste (Fallback: kindLabel). */
+  /** Caption of the feature in the nearby selection list (fallback: kindLabel). */
   nearbyLabel?(feature: MapGeoJSONFeature): string;
-  /** Farbpunkt des Features in der Nearby-Auswahlliste (Fallback: Grau). */
+  /** Color dot of the feature in the nearby selection list (fallback: grey). */
   dotColor?(feature: MapGeoJSONFeature): string;
 }
 
-/** Ein interaktiver Treffer einer Punktabfrage (oberstes Feature zuerst). */
+/** One interactive hit of a point query (topmost feature first). */
 export interface InteractiveHit {
   feature: MapGeoJSONFeature;
   spec: InteractiveSpec;
 }
 
-/** Klick-Trefferradius in Pixeln (dünne Linien / kleine, bewegte Punkte). */
+/** Click hit radius in pixels (thin lines / small, moving points). */
 const CLICK_RADIUS_PX = 6;
 
 export class MapController {
@@ -39,8 +39,8 @@ export class MapController {
   constructor(container: HTMLElement) {
     this.map = new maplibregl.Map({
       container,
-      // Inline-Style: dunkles CARTO-Raster-Basemap (keyless; einziger direkter
-      // externer Zugriff des Browsers – alle Daten-APIs laufen über unseren Server).
+      // Inline style: dark CARTO raster basemap (keyless; the only direct
+      // external access of the browser – all data APIs go through our server).
       style: {
         version: 8,
         sources: {
@@ -72,47 +72,47 @@ export class MapController {
       for (const cb of cbs) cb();
     });
 
-    // Ein globaler Klick-Handler für alle interaktiven Layer: das oberste Feature
-    // gewinnt (queryRenderedFeatures liefert in Render-Reihenfolge, oben zuerst).
+    // One global click handler for all interactive layers: the topmost feature
+    // wins (queryRenderedFeatures returns in render order, top first).
     this.map.on('click', (e: MapMouseEvent) => this.handleClick(e));
   }
 
-  /** Führt cb aus, sobald der Karten-Style geladen ist (oder sofort, wenn schon bereit). */
+  /** Runs cb once the map style is loaded (or immediately when already ready). */
   onReady(cb: () => void): void {
     if (this.ready) cb();
     else this.readyCbs.push(cb);
   }
 
   /**
-   * ACHTUNG Zoom-Konvention: MapLibre rechnet auf 512er-Kachelbasis, Leaflet und
-   * Transitous auf 256er – MapLibre-Zoom ≈ Leaflet-/Transitous-Zoom − 1.
-   * Für /api/livetrips (Transitous-Zoom) daher +1.
+   * NOTE zoom convention: MapLibre computes on a 512px tile base, Leaflet and
+   * Transitous on 256px – MapLibre zoom ≈ Leaflet/Transitous zoom − 1.
+   * Hence +1 for /api/livetrips (Transitous zoom).
    */
   getTransitousZoom(): number {
     return this.map.getZoom() + 1;
   }
 
-  /** Legt eine GeoJSON-Source an oder aktualisiert ihre Daten (idempotent). */
+  /** Creates a GeoJSON source or updates its data (idempotent). */
   addOrSetGeoJson(id: string, data: GeoJSON.GeoJSON): void {
     const source = this.map.getSource(id) as GeoJSONSource | undefined;
     if (source) source.setData(data);
     else this.map.addSource(id, { type: 'geojson', data });
   }
 
-  /** Fügt einen Layer nur hinzu, wenn er noch nicht existiert. */
+  /** Adds a layer only when it does not exist yet. */
   addLayerOnce(layerSpec: LayerSpecification, before?: string): void {
     if (this.map.getLayer(layerSpec.id)) return;
-    // `before` nur verwenden, wenn der Ziel-Layer existiert (robust bei Ladereihenfolge).
+    // Use `before` only when the target layer exists (robust against load order).
     this.map.addLayer(layerSpec, before && this.map.getLayer(before) ? before : undefined);
   }
 
-  /** Layer-Sichtbarkeit über die visibility-Layout-Eigenschaft schalten. */
+  /** Toggles layer visibility via the visibility layout property. */
   setVisible(layerId: string, on: boolean): void {
     if (!this.map.getLayer(layerId)) return;
     this.map.setLayoutProperty(layerId, 'visibility', on ? 'visible' : 'none');
   }
 
-  /** Gerenderte Features in einer Pixel-Bbox um den Punkt (nur existierende Layer). */
+  /** Rendered features in a pixel bbox around the point (existing layers only). */
   queryAt(point: { x: number; y: number }, opts: { radiusPx: number; layers: string[] }): MapGeoJSONFeature[] {
     const layers = opts.layers.filter((id) => this.map.getLayer(id));
     if (!layers.length) return [];
@@ -126,7 +126,7 @@ export class MapController {
     );
   }
 
-  /** Interaktive Treffer (oberstes Feature zuerst) im Radius um den Punkt. */
+  /** Interactive hits (topmost feature first) within the radius around the point. */
   queryInteractiveAt(point: { x: number; y: number }, radiusPx: number = CLICK_RADIUS_PX): InteractiveHit[] {
     const feats = this.queryAt(point, { radiusPx, layers: [...this.interactive.keys()] });
     const hits: InteractiveHit[] = [];
@@ -137,7 +137,7 @@ export class MapController {
     return hits;
   }
 
-  /** Öffnet ein Popup (schließt ein ggf. offenes vorher). */
+  /** Opens a popup (closes a possibly open one first). */
   openPopup(lngLat: LngLatLike, content: string | HTMLElement, maxWidthPx = 380): void {
     this.popup?.remove();
     const popup = new maplibregl.Popup({ maxWidth: `${maxWidthPx}px` }).setLngLat(lngLat);
@@ -148,13 +148,13 @@ export class MapController {
   }
 
   /**
-   * Registriert einen Layer als interaktiv: Klick öffnet das Popup des obersten
-   * Features, Hover zeigt den Pointer-Cursor. Die Registry nutzt der Folgeschritt
-   * auch für die Rechtsklick-Liste („Elemente in der Nähe").
+   * Registers a layer as interactive: click opens the popup of the topmost
+   * feature, hover shows the pointer cursor. The registry is also used by the
+   * right-click list ("Elemente in der Nähe").
    */
   registerInteractive(layerId: string, spec: InteractiveSpec): void {
     this.interactive.set(layerId, spec);
-    // Delegierte Events funktionieren auch, wenn der Layer erst später angelegt wird.
+    // Delegated events also work when the layer is created later.
     this.map.on('mouseenter', layerId, () => {
       this.hovered.add(layerId);
       this.updateCursor();
@@ -165,7 +165,7 @@ export class MapController {
     });
   }
 
-  /** Karte und Ressourcen freigeben (React-cleanup). */
+  /** Releases the map and resources (React cleanup). */
   dispose(): void {
     this.popup?.remove();
     this.popup = null;

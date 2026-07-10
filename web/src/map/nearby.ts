@@ -1,19 +1,18 @@
-// Rechtsklick „Elemente in der Nähe": Da Züge/Meldungen auf den Strecken liegen,
-// überdeckt beim Linksklick das oberste Objekt die darunterliegenden. Rechtsklick
-// sammelt alle interaktiven Features in einer ±14-px-Bbox (Registry des
-// MapController): ein Treffer öffnet direkt sein Popup, mehrere eine klickbare
-// Auswahlliste (DOM-Inhalt mit echten Event-Listenern, popup.setDOMContent).
+// Right-click "elements nearby": since trains/notices sit on top of the lines,
+// a left click only hits the topmost object. Right click collects all
+// interactive features in a ±14 px bbox (registry of the MapController): a
+// single hit opens its popup directly, multiple hits open a clickable
+// selection list (DOM content with real event listeners, popup.setDOMContent).
 import type { MapMouseEvent } from 'maplibre-gl';
+import { NEUTRAL_GREY } from './color-scales';
 import type { InteractiveHit, MapController } from './controller';
 
-/** Pixel-Radius der Bbox um den Klickpunkt. */
+/** Pixel radius of the bbox around the click point. */
 const NEARBY_RADIUS_PX = 14;
-/** Fallback-Farbpunkt, falls ein Layer keine dotColor liefert. */
-const FALLBACK_DOT = '#8894a0';
-/** Breite der Auswahlliste (Popup-maxWidth; die Liste selbst stylt .nearby). */
+/** Width of the selection list (popup maxWidth; the list itself styles .nearby). */
 const LIST_MAX_WIDTH_PX = 320;
 
-/** Gleiche Features aus mehreren Layern (z. B. Linie + Highlight) zusammenfassen. */
+/** Merges identical features from multiple layers (e.g. line + highlight). */
 function dedup(hits: InteractiveHit[]): InteractiveHit[] {
   const seen = new Set<string>();
   const out: InteractiveHit[] = [];
@@ -28,7 +27,7 @@ function dedup(hits: InteractiveHit[]): InteractiveHit[] {
 }
 
 export class NearbyPicker {
-  // Gebundener Handler, damit dispose() ihn wieder abmelden kann.
+  // Bound handler so dispose() can unregister it again.
   private readonly onContextMenu = (e: MapMouseEvent): void => this.handle(e);
 
   constructor(private controller: MapController) {
@@ -40,7 +39,7 @@ export class NearbyPicker {
   }
 
   private handle(e: MapMouseEvent): void {
-    e.originalEvent?.preventDefault(); // Browser-Kontextmenü unterdrücken
+    e.originalEvent?.preventDefault(); // suppress the browser context menu
     const hits = dedup(this.controller.queryInteractiveAt(e.point, NEARBY_RADIUS_PX));
     if (!hits.length) return;
     if (hits.length === 1) {
@@ -48,22 +47,22 @@ export class NearbyPicker {
       this.controller.openPopup(e.lngLat, hit.spec.popupHtml(hit.feature));
       return;
     }
-    this.controller.openPopup(e.lngLat, this.buildListe(hits, e), LIST_MAX_WIDTH_PX);
+    this.controller.openPopup(e.lngLat, this.buildList(hits, e), LIST_MAX_WIDTH_PX);
   }
 
-  /** Auswahlliste als DOM (Klick auf einen Eintrag öffnet dessen Popup). */
-  private buildListe(hits: InteractiveHit[], e: MapMouseEvent): HTMLElement {
+  /** Selection list as DOM (clicking an entry opens its popup). */
+  private buildList(hits: InteractiveHit[], e: MapMouseEvent): HTMLElement {
     const wrap = document.createElement('div');
     wrap.className = 'nearby';
-    const titel = document.createElement('b');
-    titel.textContent = `${hits.length} Elemente in der Nähe`;
-    wrap.appendChild(titel);
+    const title = document.createElement('b');
+    title.textContent = `${hits.length} Elemente in der Nähe`;
+    wrap.appendChild(title);
     for (const hit of hits) {
       const item = document.createElement('div');
       item.className = 'nearby-item';
       const dot = document.createElement('span');
       dot.className = 'dot';
-      dot.style.background = hit.spec.dotColor?.(hit.feature) ?? FALLBACK_DOT;
+      dot.style.background = hit.spec.dotColor?.(hit.feature) ?? NEUTRAL_GREY;
       const txt = document.createElement('span');
       txt.className = 'txt';
       const kind = document.createElement('span');
@@ -74,7 +73,7 @@ export class NearbyPicker {
       label.textContent = hit.spec.nearbyLabel?.(hit.feature) ?? hit.spec.kindLabel(hit.feature);
       txt.append(kind, label);
       item.append(dot, txt);
-      // openPopup schließt die Auswahlliste automatisch (nur ein Popup zugleich).
+      // openPopup closes the selection list automatically (only one popup at a time).
       item.addEventListener('click', () =>
         this.controller.openPopup(e.lngLat, hit.spec.popupHtml(hit.feature)));
       wrap.appendChild(item);

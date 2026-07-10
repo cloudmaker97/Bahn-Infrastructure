@@ -1,7 +1,7 @@
 {
   "name": "isr-streckennetz",
   "version": "1.0.1",
-  "description": "DB Infrastrukturregister (ISR): Datenexport, Next.js/MapLibre-Karte, Routing und TUI-Recherche",
+  "description": "DB infrastructure register (ISR): data export, Next.js/MapLibre map, routing, and TUI search",
   "type": "module",
   "scripts": {
     "start": "tsx src/main.ts",

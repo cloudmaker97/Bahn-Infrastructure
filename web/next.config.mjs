@@ -1,42 +1,42 @@
-// Next-Konfiguration für das ISR-Web-Frontend.
-// Prod: statischer Export nach web/out (der Node-Server liefert die Artefakte aus,
-// gleiche Origin -> kein Proxy nötig). Dev: kein Export, damit die rewrites greifen
-// (`output: 'export'` würde rewrites deaktivieren – daher die Fallunterscheidung;
-// `next build` setzt NODE_ENV=production, `next dev` setzt development).
+// Next configuration for the ISR web frontend.
+// Prod: static export to web/out (the Node server serves the artifacts, same
+// origin -> no proxy needed). Dev: no export so the rewrites apply
+// (`output: 'export'` would disable rewrites – hence the case distinction;
+// `next build` sets NODE_ENV=production, `next dev` sets development).
 import { fileURLToPath } from 'node:url';
 
-const istProd = process.env.NODE_ENV === 'production';
+const isProd = process.env.NODE_ENV === 'production';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: istProd ? 'export' : undefined,
+  output: isProd ? 'export' : undefined,
 
-  // Workspace-Wurzel = Repo-Wurzel (wegen der Importe aus ../src/shared); sonst
-  // rät Next anhand von Lockfiles und kann daneben liegen.
+  // Workspace root = repo root (because of the imports from ../src/shared);
+  // otherwise Next guesses from lockfiles and can get it wrong.
   outputFileTracingRoot: fileURLToPath(new URL('..', import.meta.url)),
 
-  // Erlaubt Importe außerhalb von web/ – die gemeinsame reine Logik liegt in
-  // ../src/shared (eine Quelle für Server und Web, via tsconfig-Alias @shared/*).
+  // Allows imports outside web/ – the shared pure logic lives in ../src/shared
+  // (one source for server and web, via the tsconfig alias @shared/*).
   experimental: { externalDir: true },
 
   webpack: (config) => {
-    // Die Module unter ../src/shared importieren untereinander mit ".js"-Endung
-    // (Node-ESM-Konvention des Backends). extensionAlias lässt Webpack dafür
-    // auch die .ts-Quelle auflösen.
+    // The modules under ../src/shared import each other with a ".js" extension
+    // (Node ESM convention of the backend). extensionAlias lets webpack resolve
+    // the .ts source for those too.
     config.resolve.extensionAlias = { '.js': ['.js', '.ts'] };
     return config;
   },
 
-  // Nur im Dev wirksam (der statische Export ignoriert rewrites): /api/* und /data/*
-  // werden auf den Node-Server durchgereicht (Ziel via API_PROXY, Standard Port 8000).
-  ...(istProd
+  // Effective in dev only (the static export ignores rewrites): /api/* and /data/*
+  // are passed through to the Node server (target via API_PROXY, default port 8000).
+  ...(isProd
     ? {}
     : {
         async rewrites() {
-          const ziel = process.env.API_PROXY || 'http://localhost:8000';
+          const target = process.env.API_PROXY || 'http://localhost:8000';
           return [
-            { source: '/api/:path*', destination: `${ziel}/api/:path*` },
-            { source: '/data/:path*', destination: `${ziel}/data/:path*` },
+            { source: '/api/:path*', destination: `${target}/api/:path*` },
+            { source: '/data/:path*', destination: `${target}/data/:path*` },
           ];
         },
       }),

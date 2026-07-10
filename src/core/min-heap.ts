@@ -1,4 +1,4 @@
-// Generischer binaerer Min-Heap. Einzige Verantwortung: Prioritaetswarteschlange (SRP).
+// Generic binary min-heap. Single responsibility: priority queue (SRP).
 export class MinHeap<T extends { d: number }> {
   private a: T[] = [];
 

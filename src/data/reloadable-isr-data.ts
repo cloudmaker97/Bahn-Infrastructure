@@ -1,12 +1,12 @@
-// Haelt die aktuelle IsrData-Instanz und stellt stabile, delegierende Sichten (Proxies)
-// auf deren Abstraktionen bereit. Server und TUI werden einmalig mit diesen Proxies
-// verdrahtet; ein reload() tauscht die zugrunde liegenden Daten im Betrieb komplett aus
-// (Hot-Reload nach Re-Scrape/Rebuild), ohne dass Konsumenten neu erzeugt werden muessen.
-// Verantwortung: Lebenszyklus/Austausch der Datenkomponenten (SRP); die Proxies wahren DIP.
+// Holds the current IsrData instance and exposes stable, delegating views (proxies)
+// onto its abstractions. Server and TUI are wired once with these proxies; reload()
+// swaps the underlying data completely at runtime (hot reload after re-scrape/rebuild)
+// without consumers having to be recreated.
+// Responsibility: lifecycle/swap of the data components (SRP); the proxies preserve DIP.
 import { IsrData } from './isr-data.js';
 import type {
-  AbschnittLookup, AbschnittProps, Edge, EntitySearch, Pathfinder, PathResult,
-  RouteMode, SearchEntry, Station, StationLookup, StationSuggester,
+  Edge, EntitySearch, Pathfinder, PathResult, RouteMode, SearchEntry,
+  SectionLookup, SectionProps, Station, StationLookup, StationSuggester,
 } from '../types.js';
 
 export class ReloadableIsrData {
@@ -16,17 +16,17 @@ export class ReloadableIsrData {
     this.current = new IsrData();
   }
 
-  /** Laedt IsrData komplett neu (nach Re-Scrape/Rebuild der Dateien). Wirft bei fehlenden Daten. */
+  /** Reloads IsrData from scratch (after re-scraping/rebuilding the files). Throws when data is missing. */
   reload(): void {
     this.current = new IsrData();
   }
 
-  /** Anzahl durchsuchbarer Objekte (fuer die TUI-Statuszeile). */
+  /** Number of searchable objects (for the TUI status line). */
   get totalObjects(): number {
     return this.current.search.entries.length;
   }
 
-  /** Kurzstatistik fuer Log/Anzeige nach dem Laden. */
+  /** Short statistics for logging/display after loading. */
   get stats(): { nodes: number; edges: number; rl100: number; objects: number } {
     return {
       nodes: this.current.graph.nodeCount,
@@ -36,7 +36,7 @@ export class ReloadableIsrData {
     };
   }
 
-  // --- Delegierende Proxies (lesen jeweils die AKTUELLE IsrData, lazy) ---
+  // --- Delegating proxies (each reads the CURRENT IsrData, lazily) ---
 
   readonly pathfinder: Pathfinder = {
     dijkstra: (start: number, goal: number, mode: RouteMode, edgeFilter?: (e: Edge) => boolean): PathResult | null =>
@@ -54,8 +54,8 @@ export class ReloadableIsrData {
       this.current.search.search(q, limit, kind),
   };
 
-  readonly abschnitte: AbschnittLookup = {
-    byStrecke: (nr: number): AbschnittProps[] => this.current.abschnitte.byStrecke(nr),
-    byStation: (stel: number): AbschnittProps[] => this.current.abschnitte.byStation(stel),
+  readonly sections: SectionLookup = {
+    byLineNumber: (nr: number): SectionProps[] => this.current.sections.byLineNumber(nr),
+    byStation: (stel: number): SectionProps[] => this.current.sections.byStation(stel),
   };
 }

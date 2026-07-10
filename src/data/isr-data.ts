@@ -1,10 +1,10 @@
-// Fassade, die die Datenkomponenten zusammensetzt (SRP je Komponente, DIP nach aussen).
-// Server und TUI erhalten von hier die benoetigten Abstraktionen.
+// Facade that assembles the data components (SRP per component, DIP outward).
+// Server and TUI obtain the abstractions they need from here.
 import { JsonStore } from './json-store.js';
 import { GraphBuilder } from './graph-builder.js';
 import { StationRepository } from './station-repository.js';
 import { SearchIndex } from './search-index.js';
-import { AbschnittRepository } from './abschnitt-repository.js';
+import { SectionRepository } from './section-repository.js';
 import { DATA_RAW, DATA_WEB } from '../config.js';
 import type { Graph } from '../core/graph.js';
 
@@ -12,7 +12,7 @@ export class IsrData {
   readonly graph: Graph;
   readonly stations: StationRepository;
   readonly search: SearchIndex;
-  readonly abschnitte: AbschnittRepository;
+  readonly sections: SectionRepository;
 
   constructor(rawDir = DATA_RAW, webDir = DATA_WEB) {
     const rawStore = new JsonStore(rawDir);
@@ -20,6 +20,6 @@ export class IsrData {
     this.graph = new GraphBuilder(webStore).build();
     this.stations = new StationRepository(rawStore);
     this.search = new SearchIndex(rawStore, this.stations.stations);
-    this.abschnitte = new AbschnittRepository(rawStore);
+    this.sections = new SectionRepository(rawStore);
   }
 }

@@ -1,21 +1,22 @@
-// Orchestriert die TUI: Zustand + stdin + InputHandler + Renderer + Suche.
-// Verantwortung: Ablaufsteuerung (SRP); Rendering und Eingabe-Parsing sind ausgelagert.
+// Orchestrates the TUI: state + stdin + InputHandler + renderer + search.
+// Responsibility: flow control (SRP); rendering and input parsing are external.
+// Notice strings are user-facing and intentionally German (product language).
 import { InputHandler } from './input-handler.js';
 import { TuiRenderer, FILTER_CYCLE, type TuiContext, type TuiState } from './tui-renderer.js';
 import { ESC } from './ansi.js';
-import type { EntitySearch, MeldungenProvider } from '../types.js';
+import type { EntitySearch, NoticesProvider } from '../types.js';
 
 export interface TuiAppOptions {
   getContext: () => TuiContext;
   onQuit: () => void;
-  onOpenBrowser?: () => void;               // Karte im Systembrowser oeffnen (Ctrl+O)
-  onRefreshData?: () => Promise<string>;    // ISR-Daten neu scrapen/bauen/laden -> Kurzstatistik (Ctrl+R)
+  onOpenBrowser?: () => void;               // open the map in the system browser (Ctrl+O)
+  onRefreshData?: () => Promise<string>;    // re-scrape/build/load the ISR data -> short stats (Ctrl+R)
 }
 
 export class TuiApp {
   private state: TuiState = {
     query: '', results: [], sel: 0, mode: 'list', detailScroll: 0, filter: null,
-    meldungen: { status: 'idle', data: null }, meldungenScroll: 0, notice: null,
+    notices: { status: 'idle', data: null }, noticesScroll: 0, notice: null,
   };
   private out = process.stdout;
   private dataRefreshing = false;
@@ -24,7 +25,7 @@ export class TuiApp {
     private search: EntitySearch,
     private renderer: TuiRenderer,
     private input: InputHandler,
-    private meldungen: MeldungenProvider,
+    private notices: NoticesProvider,
     private opts: TuiAppOptions,
   ) {}
 
@@ -33,7 +34,7 @@ export class TuiApp {
     if (stdin.isTTY) stdin.setRawMode(true);
     stdin.resume();
     stdin.setEncoding('utf8');
-    this.out.write(`${ESC}[?25l`); // Cursor verstecken
+    this.out.write(`${ESC}[?25l`); // hide the cursor
     stdin.on('data', (k: string) => this.onKey(k));
     this.out.on('resize', () => this.draw());
     this.draw();
@@ -42,7 +43,7 @@ export class TuiApp {
   private onKey(key: string): void {
     const action = this.input.parse(key, this.state.mode);
     const s = this.state;
-    s.notice = null; // transiente Statusmeldung bei jeder Eingabe zuruecksetzen
+    s.notice = null; // reset the transient status message on every input
     switch (action.type) {
       case 'quit': this.cleanup(); this.opts.onQuit(); return;
       case 'char': s.query += action.ch; this.updateResults(); break;
@@ -50,20 +51,20 @@ export class TuiApp {
       case 'clear': s.query = ''; this.updateResults(); break;
       case 'up':
         if (s.mode === 'detail') s.detailScroll = Math.max(0, s.detailScroll - 1);
-        else if (s.mode === 'meldungen') s.meldungenScroll = Math.max(0, s.meldungenScroll - 1);
+        else if (s.mode === 'notices') s.noticesScroll = Math.max(0, s.noticesScroll - 1);
         else s.sel = Math.max(0, s.sel - 1);
         break;
       case 'down':
         if (s.mode === 'detail') s.detailScroll += 1;
-        else if (s.mode === 'meldungen') s.meldungenScroll += 1;
+        else if (s.mode === 'notices') s.noticesScroll += 1;
         else s.sel = Math.min(s.results.length - 1, s.sel + 1);
         break;
       case 'enter': if (s.results.length) { s.mode = 'detail'; s.detailScroll = 0; } break;
       case 'back': s.mode = 'list'; break;
       case 'filter-next': this.cycleFilter(1); break;
       case 'filter-prev': this.cycleFilter(-1); break;
-      case 'meldungen-open': this.openMeldungen(); break;
-      case 'refresh': this.refreshMeldungen(); break;
+      case 'notices-open': this.openNotices(); break;
+      case 'refresh': this.refreshNotices(); break;
       case 'open-browser': this.opts.onOpenBrowser?.(); s.notice = 'Karte im Browser geöffnet.'; break;
       case 'refresh-data': this.refreshData(); break;
       case 'none': return;
@@ -71,23 +72,23 @@ export class TuiApp {
     this.draw();
   }
 
-  private openMeldungen(): void {
+  private openNotices(): void {
     const s = this.state;
-    s.mode = 'meldungen';
-    s.meldungenScroll = 0;
-    if (!s.meldungen.data) {
-      s.meldungen = { status: 'loading', data: null };
-      this.loadMeldungen(false);
+    s.mode = 'notices';
+    s.noticesScroll = 0;
+    if (!s.notices.data) {
+      s.notices = { status: 'loading', data: null };
+      this.loadNotices(false);
     }
   }
 
-  private refreshMeldungen(): void {
-    if (this.state.mode !== 'meldungen') return;
-    this.state.meldungen = { status: 'refreshing', data: this.state.meldungen.data };
-    this.loadMeldungen(true);
+  private refreshNotices(): void {
+    if (this.state.mode !== 'notices') return;
+    this.state.notices = { status: 'refreshing', data: this.state.notices.data };
+    this.loadNotices(true);
   }
 
-  /** Ctrl+R: ISR-Daten vollstaendig neu scrapen/bauen/laden (laeuft im Hintergrund). */
+  /** Ctrl+R: fully re-scrape/build/load the ISR data (runs in the background). */
   private refreshData(): void {
     if (this.dataRefreshing || !this.opts.onRefreshData) return;
     this.dataRefreshing = true;
@@ -95,7 +96,7 @@ export class TuiApp {
     this.draw();
     void this.opts.onRefreshData().then((summary) => {
       this.state.notice = 'Daten aktualisiert: ' + summary;
-      this.updateResults(); // laufende Suche mit den neuen Daten neu ausfuehren
+      this.updateResults(); // rerun the current search with the new data
     }).catch((e) => {
       this.state.notice = 'Daten-Refresh fehlgeschlagen: ' + (e instanceof Error ? e.message : String(e));
     }).finally(() => {
@@ -104,15 +105,15 @@ export class TuiApp {
     });
   }
 
-  /** Holt Daten (ggf. erzwungen) und zeichnet neu, wenn die Ansicht noch offen ist. */
-  private loadMeldungen(force: boolean): void {
-    void this.meldungen.getData(force ? { force: true } : undefined).then((data) => {
-      this.state.meldungen = { status: 'ready', data };
-      if (this.state.mode === 'meldungen') this.draw();
+  /** Fetches data (forced if requested) and redraws when the view is still open. */
+  private loadNotices(force: boolean): void {
+    void this.notices.getData(force ? { force: true } : undefined).then((data) => {
+      this.state.notices = { status: 'ready', data };
+      if (this.state.mode === 'notices') this.draw();
     }).catch(() => {
-      // getData() sollte nie werfen; falls doch, nicht auf loading/refreshing haengen bleiben.
-      this.state.meldungen = { status: 'ready', data: this.state.meldungen.data };
-      if (this.state.mode === 'meldungen') this.draw();
+      // getData() should never throw; if it does, do not hang on loading/refreshing.
+      this.state.notices = { status: 'ready', data: this.state.notices.data };
+      if (this.state.mode === 'notices') this.draw();
     });
   }
 
@@ -121,7 +122,7 @@ export class TuiApp {
     this.state.sel = 0;
   }
 
-  /** Schaltet den Ergebnistyp-Filter zyklisch weiter (Tab: +1, Shift+Tab: -1). */
+  /** Cycles the result-kind filter (Tab: +1, Shift+Tab: -1). */
   private cycleFilter(dir: 1 | -1): void {
     const i = FILTER_CYCLE.indexOf(this.state.filter);
     const n = FILTER_CYCLE.length;

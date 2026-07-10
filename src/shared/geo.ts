@@ -1,25 +1,26 @@
-// Reine Geo-Helfer: Track-Interpolation und Point-in-Polygon gegen die Landesgrenze.
-// Von Server (DE-Filter in LiveTripsService) und Web (Zug-Animation) gemeinsam genutzt.
+// Pure geo helpers: track interpolation and point-in-polygon against the national
+// boundary. Shared by the server (DE filter in LiveTripsService) and the web
+// frontend (train animation).
 import type { LatLon } from './polyline.js';
 
-/** Ein Grenz-Ring als [lon, lat]-Punktliste (GeoJSON-Reihenfolge). */
+/** A boundary ring as a [lon, lat] point list (GeoJSON order). */
 export type Ring = [number, number][];
 
-/** Vorberechneter Fahrweg: Punkte + kumulative Distanzen für die Interpolation. */
+/** Precomputed travel path: points + cumulative distances for interpolation. */
 export interface Track {
   points: LatLon[];
   cumDist: number[];
   total: number;
 }
 
-/** Näherungsdistanz zweier [lat,lon] (äquirektangulär, nur zur Parametrisierung). */
+/** Approximate distance of two [lat,lon] points (equirectangular, parametrization only). */
 function segDist(a: LatLon, b: LatLon): number {
   const dLat = b[0] - a[0];
   const dLon = (b[1] - a[1]) * Math.cos((((a[0] + b[0]) / 2) * Math.PI) / 180);
   return Math.sqrt(dLat * dLat + dLon * dLon);
 }
 
-/** Baut aus einer Punktliste die kumulativen Distanzen für die Interpolation. */
+/** Builds the cumulative distances for interpolation from a point list. */
 export function buildTrack(coords: LatLon[]): Track {
   const cumDist = [0];
   for (let i = 1; i < coords.length; i++) {
@@ -29,8 +30,8 @@ export function buildTrack(coords: LatLon[]): Track {
 }
 
 /**
- * Position bei Anteil `frac` (0..1) der Gesamtlänge; linear zwischen Stützpunkten.
- * Klemmt `frac` auf [0, 1]. Gibt null bei leerem Track.
+ * Position at fraction `frac` (0..1) of the total length; linear between vertices.
+ * Clamps `frac` to [0, 1]. Returns null for an empty track.
  */
 export function positionAt(track: Track, frac: number): LatLon | null {
   const pts = track.points;
@@ -50,7 +51,7 @@ export function positionAt(track: Track, frac: number): LatLon | null {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 }
 
-/** Ray-Casting: liegt [lon, lat] innerhalb eines Rings? */
+/** Ray casting: does [lon, lat] lie inside a ring? */
 export function pointInRing(lon: number, lat: number, ring: Ring): boolean {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -63,14 +64,14 @@ export function pointInRing(lon: number, lat: number, ring: Ring): boolean {
   return inside;
 }
 
-/** Liegt [lon, lat] in irgendeinem der (äußeren) Ringe? Ohne Ringe: true (kein Filter). */
+/** Does [lon, lat] lie in any of the (outer) rings? Without rings: true (no filter). */
 export function pointInBoundary(lon: number, lat: number, rings: Ring[] | null | undefined): boolean {
   if (!rings || !rings.length) return true;
   for (const ring of rings) if (pointInRing(lon, lat, ring)) return true;
   return false;
 }
 
-/** Minimale GeoJSON-Sicht für die Ring-Extraktion. */
+/** Minimal GeoJSON view for ring extraction. */
 interface GeoJsonLike {
   type?: string;
   features?: { geometry?: { type?: string; coordinates?: unknown } }[];
@@ -78,7 +79,7 @@ interface GeoJsonLike {
   coordinates?: unknown;
 }
 
-/** Extrahiert die äußeren Ringe aus einem (Multi)Polygon-GeoJSON. */
+/** Extracts the outer rings from a (Multi)Polygon GeoJSON. */
 export function boundaryRings(geojson: GeoJsonLike | null | undefined): Ring[] {
   const rings: Ring[] = [];
   const feats =
@@ -94,7 +95,7 @@ export function boundaryRings(geojson: GeoJsonLike | null | undefined): Ring[] {
   return rings;
 }
 
-/** Umschließende Bounding-Box aller Ring-Punkte ([lon,lat]). */
+/** Enclosing bounding box of all ring points ([lon,lat]). */
 export function ringsBbox(rings: Ring[]): { minLon: number; minLat: number; maxLon: number; maxLat: number } {
   let minLon = Infinity;
   let minLat = Infinity;

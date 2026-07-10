@@ -1,169 +1,128 @@
 'use client';
 
-// Kartenanwendung: verkabelt den React-freien MapController mit den Layer-Modulen
-// (Strecken, Live-Züge, Streckeninfo, ISR-Overlays, Route, Nearby) und hält den
-// UI-Zustand (Einfärbung, Sichtbarkeiten, Statuszeilen, Zähler).
-import { useEffect, useRef, useState } from 'react';
+// Map application: connects the imperative map world (useMapLayers) with the
+// React UI state (color mode, visibilities, status lines, counters) and lays
+// out the panel, layer control, and version badge. All visible text is German.
+import { useEffect, useState } from 'react';
 import type { RouteResult } from '@/lib/types';
-import { MapController } from '@/map/controller';
-import { IsrOverlays, OVERLAY_EINTRAEGE, type OverlayKey } from '@/map/isr-overlays';
-import { NearbyPicker } from '@/map/nearby';
-import { RouteLayer } from '@/map/route';
-import { StreckenLayer, type ColorMode } from '@/map/strecken';
-import { StreckenInfoLayers, type SiKategorie, type SiPanelDaten } from '@/map/streckeninfo';
-import { TrainsLayer } from '@/map/trains';
+import { OVERLAY_ENTRIES, type OverlayKey } from '@/map/isr-overlays';
+import { type NetworkStatusCategory, type NetworkStatusPanelData } from '@/map/network-status';
+import { type ColorMode } from '@/map/rail-network';
+import AggregateNotices from './AggregateNotices';
 import LayerControl, { type LayerEntry } from './LayerControl';
 import RoutingForm from './RoutingForm';
-import Sammelmeldungen from './Sammelmeldungen';
 import SearchForm from './SearchForm';
-import SidePanel, { type StreckenStatus } from './SidePanel';
+import SidePanel, { type RailNetworkStatus } from './SidePanel';
+import { useMapLayers } from './use-map-layers';
 import VersionBadge from './VersionBadge';
 
 export default function MapApp() {
-  const mapDiv = useRef<HTMLDivElement | null>(null);
-  const streckenRef = useRef<StreckenLayer | null>(null);
-  const trainsRef = useRef<TrainsLayer | null>(null);
-  const streckeninfoRef = useRef<StreckenInfoLayers | null>(null);
-  const overlaysRef = useRef<IsrOverlays | null>(null);
-  const routeRef = useRef<RouteLayer | null>(null);
-
-  const [colorMode, setColorMode] = useState<ColorMode>('elektr');
-  // Standard wie im Alt-Frontend: Live-Züge AN, Unterfilter „Nur Echtzeit" AN,
-  // Störungen AN, Baustellen/Streckenruhen und alle ISR-Overlays AUS.
+  const [colorMode, setColorMode] = useState<ColorMode>('electrification');
+  // Defaults as in the old frontend: live trains ON, sub-filter "Nur Echtzeit" ON,
+  // disruptions ON, construction/closures and all ISR overlays OFF.
   const [liveOn, setLiveOn] = useState(true);
   const [realtimeOnly, setRealtimeOnly] = useState(true);
-  const [siOn, setSiOn] = useState<Record<SiKategorie, boolean>>({
-    stoerung: true, baustelle: false, ruhe: false,
+  const [statusOn, setStatusOn] = useState<Record<NetworkStatusCategory, boolean>>({
+    disruption: true, construction: false, closure: false,
   });
   const [overlayOn, setOverlayOn] = useState<Partial<Record<OverlayKey, boolean>>>({});
 
-  const [streckenStatus, setStreckenStatus] = useState<StreckenStatus>({ text: 'Lade Daten …', frac: null });
-  const [siStatus, setSiStatus] = useState('');
+  const [railNetworkStatus, setRailNetworkStatus] = useState<RailNetworkStatus>({ text: 'Lade Daten …', frac: null });
+  const [networkStatusText, setNetworkStatusText] = useState('');
   const [trainsStatus, setTrainsStatus] = useState('');
-  const [siDaten, setSiDaten] = useState<SiPanelDaten | null>(null);
+  const [networkStatusData, setNetworkStatusData] = useState<NetworkStatusPanelData | null>(null);
   const [overlayCounts, setOverlayCounts] = useState<Partial<Record<OverlayKey, number>>>({});
 
-  // Karte + Layer einmalig aufbauen (und beim Unmount vollständig abbauen).
+  const layers = useMapLayers({
+    onRailStatus: (text, frac) => setRailNetworkStatus({ text, frac }),
+    onNetworkStatusText: setNetworkStatusText,
+    onNetworkStatusData: setNetworkStatusData,
+    onTrainsStatus: setTrainsStatus,
+    onOverlayCount: (key, count) => setOverlayCounts((prev) => ({ ...prev, [key]: count })),
+  });
+
+  // Pass the UI state down to the (imperative) layers.
+  useEffect(() => { layers.railNetwork.current?.setColorMode(colorMode); }, [layers, colorMode]);
   useEffect(() => {
-    if (!mapDiv.current) return;
-    const controller = new MapController(mapDiv.current);
-    const strecken = new StreckenLayer(controller, (text, frac) => setStreckenStatus({ text, frac }));
-    const trains = new TrainsLayer(controller, setTrainsStatus, { realtimeOnly: true });
-    const streckeninfo = new StreckenInfoLayers(controller, strecken, setSiStatus, setSiDaten);
-    const overlays = new IsrOverlays(controller, strecken, (key, count) =>
-      setOverlayCounts((prev) => ({ ...prev, [key]: count })));
-    const route = new RouteLayer(controller);
-    const nearby = new NearbyPicker(controller);
-    streckenRef.current = strecken;
-    trainsRef.current = trains;
-    streckeninfoRef.current = streckeninfo;
-    overlaysRef.current = overlays;
-    routeRef.current = route;
-
-    // Ruhen-Linien nachziehen, sobald die Strecken-Geometrie (idIndex) geladen ist.
-    void strecken.load().then(() => streckeninfo.rebuildRuhen());
-    streckeninfo.start();
-    overlays.loadAll();
-
-    controller.onReady(() => {
-      // E2E-Hooks: Karte, Controller und Layer-Module global verfügbar machen.
-      (window as unknown as Record<string, unknown>)['__ISR__'] = {
-        map: controller.map, controller, trains, streckeninfo, overlays,
-      };
-    });
-
-    return () => {
-      nearby.dispose();
-      streckeninfo.dispose();
-      trains.dispose();
-      controller.dispose();
-      streckenRef.current = null;
-      trainsRef.current = null;
-      streckeninfoRef.current = null;
-      overlaysRef.current = null;
-      routeRef.current = null;
-    };
-  }, []);
-
-  // UI-Zustand an die (imperativen) Layer weiterreichen.
-  useEffect(() => { streckenRef.current?.setColorMode(colorMode); }, [colorMode]);
-  useEffect(() => {
-    const trains = trainsRef.current;
+    const trains = layers.trains.current;
     if (!trains) return;
     if (liveOn) trains.start();
     else trains.stop();
-  }, [liveOn]);
-  useEffect(() => { trainsRef.current?.setRealtimeOnly(realtimeOnly); }, [realtimeOnly]);
+  }, [layers, liveOn]);
+  useEffect(() => { layers.trains.current?.setRealtimeOnly(realtimeOnly); }, [layers, realtimeOnly]);
   useEffect(() => {
-    const si = streckeninfoRef.current;
+    const si = layers.networkStatus.current;
     if (!si) return;
-    for (const [kat, on] of Object.entries(siOn) as Array<[SiKategorie, boolean]>) si.setVisible(kat, on);
-  }, [siOn]);
+    for (const [category, on] of Object.entries(statusOn) as Array<[NetworkStatusCategory, boolean]>) {
+      si.setVisible(category, on);
+    }
+  }, [layers, statusOn]);
   useEffect(() => {
-    const overlays = overlaysRef.current;
+    const overlays = layers.overlays.current;
     if (!overlays) return;
     for (const [key, on] of Object.entries(overlayOn) as Array<[OverlayKey, boolean]>) {
       overlays.setVisible(key, on);
     }
-  }, [overlayOn]);
+  }, [layers, overlayOn]);
 
-  // Streckensuche: Highlight + Zoom im Layer, Status-Meldung wie im Alt-Frontend.
+  // Line search: highlight + zoom in the layer, status message as in the old frontend.
   const handleSearch = (nr: string): void => {
-    const n = streckenRef.current?.search(nr) ?? 0;
-    setStreckenStatus({ text: n > 0 ? `Strecke ${nr}: ${n} Abschnitt(e)` : `Strecke ${nr} nicht gefunden` });
+    const n = layers.railNetwork.current?.search(nr) ?? 0;
+    setRailNetworkStatus({ text: n > 0 ? `Strecke ${nr}: ${n} Abschnitt(e)` : `Strecke ${nr} nicht gefunden` });
   };
 
-  // Ebenen-Steuerung: Live-Züge, Streckeninfo (nach erstem Load), Trennlinie,
-  // ISR-Overlays (sobald deren Zähler geladen sind) – Reihenfolge wie im Alt-Frontend.
+  // Layer control: entries + per-key toggle actions built together (no string
+  // protocol to parse). Live trains, network status (after the first load),
+  // divider, ISR overlays (once their counters have loaded).
   const layerItems: LayerEntry[] = [
     { key: 'live', label: 'Live-Züge', checked: liveOn },
     { key: 'live-rt', label: 'Nur Echtzeit', checked: realtimeOnly, indent: true },
   ];
-  if (siDaten) {
-    layerItems.push(
-      { key: 'si-stoerung', label: 'Störungen', count: siDaten.counts.stoerungen, checked: siOn.stoerung },
-      { key: 'si-baustelle', label: 'Baustellen', count: siDaten.counts.baustellen, checked: siOn.baustelle, indent: true },
-      { key: 'si-ruhe', label: 'Streckenruhen', count: siDaten.counts.streckenruhen, checked: siOn.ruhe, indent: true },
-    );
+  const toggles: Record<string, (on: boolean) => void> = {
+    live: setLiveOn,
+    'live-rt': setRealtimeOnly,
+  };
+  if (networkStatusData) {
+    const statusEntries: Array<{ category: NetworkStatusCategory; label: string; count: number; indent?: boolean }> = [
+      { category: 'disruption', label: 'Störungen', count: networkStatusData.counts.disruptions },
+      { category: 'construction', label: 'Baustellen', count: networkStatusData.counts.constructionSites, indent: true },
+      { category: 'closure', label: 'Streckenruhen', count: networkStatusData.counts.lineClosures, indent: true },
+    ];
+    for (const { category, label, count, indent } of statusEntries) {
+      const key = `ns-${category}`;
+      layerItems.push({ key, label, count, checked: statusOn[category], indent });
+      toggles[key] = (on) => setStatusOn((prev) => ({ ...prev, [category]: on }));
+    }
   }
   const overlayItems: LayerEntry[] = [];
-  for (const eintrag of OVERLAY_EINTRAEGE) {
-    const count = overlayCounts[eintrag.key];
-    if (count == null) continue; // erst anbieten, wenn die Daten geladen sind
-    overlayItems.push({
-      key: `ov-${eintrag.key}`, label: eintrag.label, count,
-      checked: overlayOn[eintrag.key] ?? false,
-    });
+  for (const entry of OVERLAY_ENTRIES) {
+    const count = overlayCounts[entry.key];
+    if (count == null) continue; // offer only once the data has loaded
+    const key = `ov-${entry.key}`;
+    overlayItems.push({ key, label: entry.label, count, checked: overlayOn[entry.key] ?? false });
+    toggles[key] = (on) => setOverlayOn((prev) => ({ ...prev, [entry.key]: on }));
   }
   if (overlayItems.length) layerItems.push({ key: 'sep-overlays', divider: true }, ...overlayItems);
 
-  const handleToggle = (key: string, on: boolean): void => {
-    if (key === 'live') setLiveOn(on);
-    else if (key === 'live-rt') setRealtimeOnly(on);
-    else if (key.startsWith('si-')) {
-      setSiOn((prev) => ({ ...prev, [key.slice(3) as SiKategorie]: on }));
-    } else if (key.startsWith('ov-')) {
-      setOverlayOn((prev) => ({ ...prev, [key.slice(3) as OverlayKey]: on }));
-    }
-  };
+  const handleToggle = (key: string, on: boolean): void => toggles[key]?.(on);
 
   return (
     <>
-      <div id="map" ref={mapDiv} />
+      <div id="map" ref={layers.mapDiv} />
       <SidePanel
         colorMode={colorMode}
         onColorModeChange={setColorMode}
-        streckenStatus={streckenStatus}
-        streckeninfoStatus={siStatus}
+        railNetworkStatus={railNetworkStatus}
+        networkStatusText={networkStatusText}
         trainsStatus={trainsStatus}
         searchSlot={<SearchForm onSearch={handleSearch} />}
         routingSlot={(
           <RoutingForm
-            onRoute={(route: RouteResult) => routeRef.current?.show(route)}
-            onClear={() => routeRef.current?.clear()}
+            onRoute={(route: RouteResult) => layers.route.current?.show(route)}
+            onClear={() => layers.route.current?.clear()}
           />
         )}
-        sammelSlot={<Sammelmeldungen items={siDaten?.sammelmeldungen ?? []} />}
+        noticesSlot={<AggregateNotices items={networkStatusData?.aggregateNotices ?? []} />}
       />
       <LayerControl items={layerItems} onToggle={handleToggle} />
       <VersionBadge />

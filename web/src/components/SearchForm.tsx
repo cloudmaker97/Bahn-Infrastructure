@@ -1,8 +1,8 @@
 'use client';
 
-// Streckensuche: Nummern-Eingabe + Zoom-Button (Enter löst ebenfalls aus).
-// Die eigentliche Suche (Highlight + fitBounds) übernimmt der StreckenLayer;
-// die Status-Meldung setzt der Aufrufer über die Strecken-Statuszeile.
+// Line search: number input + zoom button (Enter triggers too).
+// The actual search (highlight + fitBounds) is done by the RailNetworkLayer;
+// the caller sets the status message via the rail-network status line.
 import { useState } from 'react';
 
 interface SearchFormProps {
@@ -11,7 +11,7 @@ interface SearchFormProps {
 
 export default function SearchForm({ onSearch }: SearchFormProps) {
   const [nr, setNr] = useState('');
-  const suchen = (): void => {
+  const search = (): void => {
     const s = nr.trim();
     if (s) onSearch(s);
   };
@@ -26,9 +26,9 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
           placeholder="z. B. 1011"
           value={nr}
           onChange={(e) => setNr(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') suchen(); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') search(); }}
         />
-        <button type="button" className="btn btn-primary" style={{ flex: '0 0 64px' }} onClick={suchen}>
+        <button type="button" className="btn btn-primary" style={{ flex: '0 0 64px' }} onClick={search}>
           Zoom
         </button>
       </div>

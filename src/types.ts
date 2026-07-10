@@ -1,25 +1,20 @@
-// Gemeinsame Typdefinitionen fuer das ISR-Projekt.
+// Shared type definitions for the ISR project: domain types plus the service
+// abstractions (DIP/ISP hub). API contract types live in src/shared/api-types.ts
+// (single source for server AND web) and are re-exported here for convenience.
+import type { LatLng, NetworkStatusResult, RouteMode, StationSuggestion } from './shared/api-types.js';
 
-export type Coord = [number, number]; // [lon, lat] (GeoJSON-Konvention)
-export type LatLng = [number, number]; // [lat, lon] (Leaflet-Konvention)
+export type {
+  LatLng, GeoFeature, FeatureCollection,
+  VersionInfo, LiveTripsResult, StationSuggestion,
+  RouteMode, RouteWaypoint, RouteSegment, RouteResult, RouteError, RouteResponse,
+  NetworkStatusCategory, EffectDTO, ValidityDTO,
+  AggregateNoticeDTO, DisruptionNoticeDTO, NetworkStatusResult,
+} from './shared/api-types.js';
 
-export interface GeoFeature<P = Record<string, unknown>> {
-  type: 'Feature';
-  geometry: {
-    type: 'MultiLineString' | 'MultiPoint' | 'LineString' | 'Point';
-    coordinates: unknown;
-  } | null;
-  properties: P;
-}
+export type Coord = [number, number]; // [lon, lat] (GeoJSON convention)
 
-export interface FeatureCollection<P = Record<string, unknown>> {
-  type: 'FeatureCollection';
-  features: GeoFeature<P>[];
-  totalFeatures?: number;
-}
-
-/** Eigenschaften eines Streckenabschnitts (Auszug, Graph-relevant). */
-export interface AbschnittProps {
+/** Properties of a line section (excerpt, graph-relevant). */
+export interface SectionProps {
   ISR_STRE_NR?: number;
   STRECKEN_ABSCHNITT?: string;
   ISR_STRECKE_VON_BIS?: string;
@@ -32,157 +27,82 @@ export interface AbschnittProps {
   [key: string]: unknown;
 }
 
-/** Eine Betriebsstelle (Knoten des Netzes). */
-export interface Station {
-  stel: number;
-  rl100: string | null;
-  name: string;
-  lat: number | null;
-  lon: number | null;
-}
+/** An operating point (node of the network); same shape as its API suggestion DTO. */
+export type Station = StationSuggestion;
 
-/** Eine Graph-Kante zwischen zwei Betriebsstellen. */
+/** A graph edge between two operating points. */
 export interface Edge {
   to: number;
   timeMin: number;
   distKm: number;
-  strecke: number | undefined;
+  lineNumber: number | undefined;
   coords: LatLng[];
 }
 
-export type RouteMode = 'fast' | 'short';
-
-export interface RouteWaypoint {
-  stel: number;
-  rl100: string | null;
-  name: string | null;
-  lat: number | null;
-  lon: number | null;
-}
-
-export interface RouteSegment {
-  strecke: number | undefined;
-  timeMin: number;
-  distKm: number;
-  coords: LatLng[];
-}
-
-export interface RouteResult {
-  ok: true;
-  mode: RouteMode;
-  from: RouteWaypoint;
-  to: RouteWaypoint;
-  totalTimeMin: number;
-  totalDistKm: number;
-  nEdges: number;
-  nWaypoints: number;
-  waypoints: RouteWaypoint[];
-  segments: RouteSegment[];
-}
-
-export interface RouteError {
-  ok: false;
-  error: string;
-}
-
-/** Ergebnis einer Pfadsuche im Graphen. */
+/** Result of a path search in the graph. */
 export interface PathResult {
   nodesSeq: number[];
   edges: Edge[];
 }
 
-// --- Abstraktionen (DIP/ISP): high-level Module haengen von diesen ab, nicht von Klassen ---
+// --- Abstractions (DIP/ISP): high-level modules depend on these, not on classes ---
 
-/** Nur die fuer Routing noetige Sicht auf Betriebsstellen. */
+/**
+ * Only the view of operating points that routing needs.
+ * "stel" is the official ISR node id (STEL_ID), "RL100" the official DB
+ * abbreviation code — both are kept as domain terms.
+ */
 export interface StationLookup {
   resolveStel(code: string | undefined): number | null;
   getStation(stel: number): Station | undefined;
 }
 
-/** Nur die fuer Routing noetige Sicht auf den Graphen. */
+/** Only the view of the graph that routing needs. */
 export interface Pathfinder {
   dijkstra(start: number, goal: number, mode: RouteMode, edgeFilter?: (e: Edge) => boolean): PathResult | null;
 }
 
 /**
- * Loest den realen Streckenverlauf zwischen zwei Betriebsstellen (RIL100) zu
- * einer [lon,lat]-Kette (GeoJSON-Reihenfolge) auf; null, wenn kein plausibler
- * Verlauf bestimmbar ist (Aufrufer faellt dann auf die Luftlinie zurueck).
+ * Resolves the real track alignment between two operating points (RIL100)
+ * into a [lon,lat] chain (GeoJSON order); null when no plausible alignment can
+ * be determined (the caller then falls back to the straight line).
  */
-export type VerlaufLookup = (
-  vonRil100: string,
-  bisRil100: string,
-  streckennummern?: number[],
+export type AlignmentLookup = (
+  fromRil100: string,
+  toRil100: string,
+  lineNumbers?: number[],
 ) => [number, number][] | null;
 
-/** Autocomplete-Vorschlaege. */
+/** Autocomplete suggestions. */
 export interface StationSuggester {
   suggest(q: string, limit?: number): Station[];
 }
 
-/** Volltextsuche ueber alle Entitaeten. Optional auf einen Ergebnistyp eingeschraenkt. */
+/** Full-text search over all entities. Optionally restricted to one result kind. */
 export interface EntitySearch {
   search(q: string, limit?: number, kind?: SearchEntry['kind'] | null): SearchEntry[];
 }
 
-/** Liefert die Abschnitte einer Strecke bzw. die einer Betriebsstelle zugehoerigen Abschnitte. */
-export interface AbschnittLookup {
-  byStrecke(streckenNr: number): AbschnittProps[];
-  /** Alle Abschnitte, an denen die Betriebsstelle (STEL_ID) Anfang oder Ende ist. */
-  byStation(stel: number): AbschnittProps[];
+/** Returns the sections of a line, or the sections attached to an operating point. */
+export interface SectionLookup {
+  byLineNumber(lineNumber: number): SectionProps[];
+  /** All sections where the operating point (STEL_ID) is start or end. */
+  byStation(stel: number): SectionProps[];
 }
 
-/** Ein durchsuchbarer Eintrag fuer TUI / Such-API. */
+/** Result kind of a searchable entry (German display labels: tui/ansi KIND_LABEL). */
+export type SearchEntryKind = 'station' | 'line' | 'tunnel' | 'bridge' | 'level-crossing';
+
+/** A searchable entry for the TUI / search API. */
 export interface SearchEntry {
-  kind: 'Betriebsstelle' | 'Strecke' | 'Tunnel' | 'Brücke' | 'Bahnübergang';
-  code: string; // RL100 / Streckennr / Name-Kürzel
+  kind: SearchEntryKind;
+  code: string; // RL100 / line number / short name
   name: string;
-  detail: string; // Zusatzinfo fuer die Anzeige
-  data: Record<string, unknown>; // vollstaendige Rohdaten
+  detail: string; // extra info for display
+  data: Record<string, unknown>; // full raw data
 }
 
-// --- Oeffentlicher strecken-info-Datenvertrag (1:1 als JSON ausgeliefert) ---
-
-export interface SammelmeldungDTO {
-  key: string;
-  cause: string;
-  subcause: string;
-  text: string;
-  beginn: string;
-  ende: string;
-  verkehrsarten: string[];
-}
-
-export interface StoerungMeldungDTO {
-  key: string;
-  cause: string;
-  subcause: string;
-  text: string;
-  beginn: string;
-  ende: string;
-  verkehrsarten: string[];
-  gleisEinschraenkung: string;
-  verortet: boolean; // hat die Stoerung eine aufloesbare Geometrie?
-}
-
-export interface StreckenInfoResult {
-  stoerungen: FeatureCollection; // nur verortet UND aktuell aktiv (fuer die Karte)
-  baustellen: FeatureCollection;
-  streckenruhen: FeatureCollection;
-  sammelmeldungen: SammelmeldungDTO[];
-  stoerungenListe: StoerungMeldungDTO[]; // ALLE aktiven Stoerungen (auch ohne Ort) fuer Listen/TUI
-  generatedAt: string;
-  counts: {
-    stoerungen: number;
-    stoerungenOhneOrt: number;
-    baustellen: number;
-    streckenruhen: number;
-    sammelmeldungen: number;
-  };
-  error: string | null;
-}
-
-/** Nur die fuer die TUI noetige Sicht auf die Betriebslage (DIP/ISP). */
-export interface MeldungenProvider {
-  getData(opts?: { force?: boolean }): Promise<StreckenInfoResult>;
+/** Only the view of the network status that the TUI needs (DIP/ISP). */
+export interface NoticesProvider {
+  getData(opts?: { force?: boolean }): Promise<NetworkStatusResult>;
 }

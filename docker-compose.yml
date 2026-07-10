@@ -1,30 +1,30 @@
-# Docker Compose für Coolify (Build-Pack "Docker Compose").
-# Headless-Betrieb ohne interaktive TUI. Coolify verwaltet Domain, Reverse-Proxy
-# (Traefik) und TLS selbst – hier wird nur der Ziel-Port über die Magic-Env-Variable
-# bekannt gemacht. Kein festes Host-Port-Mapping (das macht Coolify).
+# Docker Compose for Coolify (build pack "Docker Compose").
+# Headless operation without the interactive TUI. Coolify manages the domain,
+# reverse proxy (Traefik), and TLS itself – only the target port is announced
+# via the magic env variable. No fixed host port mapping (Coolify does that).
 services:
   isr:
     build:
       context: .
       dockerfile: Dockerfile
     environment:
-      # Coolify erzeugt daraus die FQDN und proxyt sie auf Container-Port 8000.
+      # Coolify derives the FQDN from this and proxies it to container port 8000.
       - SERVICE_FQDN_ISR_8000
       - PORT=8000
       - HEADLESS=1
     expose:
       - "8000"
     volumes:
-      # Persistente ISR-Daten -> kein erneutes Scrapen bei jedem Deploy/Neustart.
+      # Persistent ISR data -> no re-scraping on every deploy/restart.
       - isr-data:/app/data
     healthcheck:
-      # Nutzt das in Node 22 eingebaute fetch; kein curl im Image nötig.
+      # Uses the fetch built into Node 22; no curl needed in the image.
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 5
-      # Der ALLERERSTE Start lädt die ISR-Daten vom DB-WFS (mehrere Minuten),
-      # erst danach lauscht der HTTP-Server -> großzügige Startphase.
+      # The VERY FIRST start loads the ISR data from the DB WFS (several minutes),
+      # only then does the HTTP server listen -> generous start period.
       start_period: 80s
     restart: unless-stopped
 
