@@ -2,7 +2,7 @@
 
 // Aggregate notices (disruptions without a location) as a collapsible box at the
 // bottom of the left panel; hidden entirely at 0 entries (as in the old frontend).
-import { fmtZeitraum } from '@/lib/format';
+import { fmtPeriod } from '@/lib/format';
 import type { AggregateNoticeDTO } from '@/lib/types';
 
 /** Trim long notice texts to a readable short form. */
@@ -22,7 +22,7 @@ export default function AggregateNotices({ items }: AggregateNoticesProps) {
           {items.map((s, i) => {
             const text = (s.text || '').trim();
             const shortText = text.length > SHORT_TEXT_MAX ? `${text.slice(0, SHORT_TEXT_MAX)} …` : text;
-            const period = fmtZeitraum(s.start, s.end);
+            const period = fmtPeriod(s.start, s.end);
             return (
               <div className="item" key={s.key || `${s.cause}-${i}`}>
                 <div className="titel">{s.cause || 'Sammelmeldung'}</div>

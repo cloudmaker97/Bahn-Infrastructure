@@ -1,4 +1,4 @@
-// Wurzel-Layout: Titel, 🚆-Favicon (Data-URL wie im Alt-Frontend) und globale Stile.
+// Root layout: title, 🚆 favicon (data URL as in the old frontend), and global styles.
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import 'maplibre-gl/dist/maplibre-gl.css';

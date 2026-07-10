@@ -1,11 +1,11 @@
-// Typisierte Fetch-Helfer für die eigenen Server-APIs. Der Server ist federführend:
-// der Browser spricht ausschließlich /api/* und /data/* an (im Dev via Next-rewrites
-// auf den Node-Server durchgereicht, im Prod gleiche Origin).
+// Typed fetch helpers for our own server APIs. The server is authoritative:
+// the browser only ever talks to /api/* and /data/* (passed through to the Node
+// server via Next rewrites in dev, same origin in prod).
 import type {
   LiveTripsResult, NetworkStatusResult, RouteMode, RouteResponse, StationSuggestion, VersionInfo,
 } from './types';
 
-/** GET + JSON mit Fehlerprüfung (HTTP-Status ≠ 2xx wirft). */
+/** GET + JSON with error check (HTTP status ≠ 2xx throws). */
 async function getJson<T>(url: string): Promise<T> {
   const resp = await fetch(url);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -16,7 +16,7 @@ export function getVersion(): Promise<VersionInfo> {
   return getJson<VersionInfo>('/api/version');
 }
 
-/** Live-Züge; `zoom` ist der Transitous-Zoom (MapLibre-Zoom + 1, ganzzahlig). */
+/** Live trains; `zoom` is the Transitous zoom (MapLibre zoom + 1, integer). */
 export function getLiveTrips(zoom: number): Promise<LiveTripsResult> {
   return getJson<LiveTripsResult>(`/api/livetrips?zoom=${Math.round(zoom)}`);
 }
@@ -26,7 +26,7 @@ export function getNetworkStatus(): Promise<NetworkStatusResult> {
   return getJson<NetworkStatusResult>('/api/streckeninfo');
 }
 
-/** Statische GeoJSON-Overlay-Datei (z. B. /data/map_tunnel.geojson). */
+/** Static GeoJSON overlay file (e.g. /data/map_tunnel.geojson). */
 export function getGeoJson(url: string): Promise<GeoJSON.FeatureCollection> {
   return getJson<GeoJSON.FeatureCollection>(url);
 }
@@ -35,7 +35,7 @@ export function getStations(q: string): Promise<StationSuggestion[]> {
   return getJson<StationSuggestion[]>(`/api/stations?q=${encodeURIComponent(q)}`);
 }
 
-/** Route berechnen; der Server antwortet auch bei Fehlern (HTTP 400) mit JSON. */
+/** Computes a route; the server responds with JSON even on errors (HTTP 400). */
 export async function getRoute(from: string, to: string, mode: RouteMode): Promise<RouteResponse> {
   const url = `/api/route?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&mode=${mode}`;
   const resp = await fetch(url);
@@ -43,8 +43,8 @@ export async function getRoute(from: string, to: string, mode: RouteMode): Promi
 }
 
 /**
- * Lädt eine (große) JSON-Datei und meldet den Fortschritt via Streaming.
- * @param onProgress frac 0..1 wenn Content-Length bekannt, sonst null (unbestimmt)
+ * Loads a (large) JSON file and reports streaming progress.
+ * @param onProgress frac 0..1 when Content-Length is known, otherwise null (indeterminate)
  */
 export async function fetchJsonWithProgress<T>(
   url: string,

@@ -6,7 +6,7 @@
 // Single responsibility: network-status overlay.
 import type { ExpressionSpecification, LayerSpecification, MapGeoJSONFeature } from 'maplibre-gl';
 import { getNetworkStatus } from '@/lib/api';
-import { fmtZeitraum, tablePopupHtml } from '@/lib/format';
+import { fmtPeriod, tablePopupHtml } from '@/lib/format';
 import type { AggregateNoticeDTO, NetworkStatusCategory, NetworkStatusResult } from '@/lib/types';
 import { emptyFeatureCollection, TRAINS_LAYER_ID } from './common';
 import type { MapController } from './controller';
@@ -86,7 +86,7 @@ export function disruptionPopupHtml(p: Record<string, unknown>): string {
     ['Text', p['text']],
     ['Wirkung', effectText],
     ['Gleiseinschränkung', p['trackRestriction']],
-    ['Zeitraum', fmtZeitraum(p['start'], p['end'])],
+    ['Zeitraum', fmtPeriod(p['start'], p['end'])],
   ]);
 }
 
@@ -102,7 +102,7 @@ export function constructionPopupHtml(p: Record<string, unknown>): string {
     ['Richtung', p['direction']],
     ['Wirkung', p['effect']],
     ['Gleiseinschränkung', p['trackRestriction']],
-    ['Zeitraum', fmtZeitraum(p['start'], p['end'])],
+    ['Zeitraum', fmtPeriod(p['start'], p['end'])],
     ['Gültigkeit', formatValidityShort(p['validities'])],
   ]);
 }
@@ -115,7 +115,7 @@ export function closurePopupHtml(p: Record<string, unknown>): string {
     ['Arbeiten', p['works']],
     ['Strecke', p['lineNumber']],
     ['Region', p['region']],
-    ['Zeitraum', fmtZeitraum(p['start'], p['end'])],
+    ['Zeitraum', fmtPeriod(p['start'], p['end'])],
     ['Gültigkeit', formatValidityShort(p['validities'])],
   ]);
 }

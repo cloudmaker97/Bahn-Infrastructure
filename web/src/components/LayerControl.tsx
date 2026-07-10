@@ -1,21 +1,21 @@
 'use client';
 
-// Ebenen-Steuerung oben rechts (Panel-Optik): Checkbox-Zeilen, optional eingerückt
-// (Unter-Filter) und mit de-DE-formatiertem Zähler; Trennlinien gliedern die
-// Gruppen (Live/Streckeninfo vs. ISR-Overlays).
+// Layer control at the top right (panel look): checkbox rows, optionally
+// indented (sub-filters) and with de-DE-formatted counters; dividers separate
+// the groups (live/network status vs. ISR overlays).
 
-/** Ein Checkbox-Eintrag der Ebenen-Steuerung. */
+/** One checkbox entry of the layer control. */
 export interface LayerItem {
   key: string;
   label: string;
   checked: boolean;
-  /** Eingerückter Unter-Filter (z. B. „Nur Echtzeit" unter „Live-Züge"). */
+  /** Indented sub-filter (e.g. "Nur Echtzeit" under "Live-Züge"). */
   indent?: boolean;
-  /** Optionaler Zähler hinter dem Label, z. B. „Betriebsstellen (12.345)". */
+  /** Optional counter after the label, e.g. "Betriebsstellen (12.345)". */
   count?: number;
 }
 
-/** Trennlinie zwischen Eintrags-Gruppen. */
+/** Divider between entry groups. */
 export interface LayerDivider {
   key: string;
   divider: true;
