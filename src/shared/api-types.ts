@@ -1,7 +1,7 @@
 // Shared API contract between the Node server and the web frontend.
 // Everything here is serialized as JSON over our own /api/* endpoints and is the
 // single source of truth for both sides (the web imports it via @shared/api-types).
-import type { TrainDTO } from './live-trips-core.js';
+import type { TrainCategory, TrainDTO } from './live-trips-core.js';
 
 /** A point as [lat, lon] (convention of the route API). */
 export type LatLng = [number, number];
@@ -58,6 +58,39 @@ export interface TripDetailsResult {
   realTime: boolean;
   stops: TripStopDTO[];
   /** Upstream error; possibly combined with the last cached state in `stops`. */
+  error: string | null;
+}
+
+// --- Departures (Transitous stoptimes API) contract: GET /api/departures?lat=&lon= ---
+
+/** One departure event at a station; times in epoch ms. */
+export interface DepartureDTO {
+  /** Transitous trip id (key/detail lookup); may be empty. */
+  tripId: string;
+  /** Display name of the train, e.g. "ICE 577". */
+  name: string;
+  /** Destination board text. */
+  headsign: string;
+  mode: string;
+  category: TrainCategory;
+  departMs: number;
+  schedDepartMs: number;
+  delayMin: number;
+  realTime: boolean;
+  track: string | null;
+  scheduledTrack: string | null;
+  cancelled: boolean;
+  /** Name of the actual stop the event belongs to (child stop of the station). */
+  stopName: string;
+}
+
+/** Response of GET /api/departures?lat=&lon= (server cache: 30 s per station). */
+export interface DeparturesResult {
+  /** Resolved stop name from Transitous (may differ from the ISR name). */
+  stationName: string;
+  departures: DepartureDTO[];
+  generatedAt: string;
+  /** Upstream error; possibly combined with the last cached state in `departures`. */
   error: string | null;
 }
 

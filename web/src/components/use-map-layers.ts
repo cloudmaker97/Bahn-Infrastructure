@@ -5,6 +5,7 @@
 // on unmount. MapApp stays a thin React component on top (SRP: construction/
 // lifecycle here, UI state there).
 import { useEffect, useRef, type RefObject } from 'react';
+import type { DeparturesStation } from '@/lib/types';
 import { MapController } from '@/map/controller';
 import { IsrOverlays, type OverlayKey } from '@/map/isr-overlays';
 import { NearbyPicker } from '@/map/nearby';
@@ -20,6 +21,8 @@ export interface MapLayerCallbacks {
   onNetworkStatusData(data: NetworkStatusPanelData): void;
   onTrainsStatus(text: string): void;
   onOverlayCount(key: OverlayKey, count: number): void;
+  /** "Nächste Abfahrten" clicked in an operating-point popup. */
+  onShowDepartures(station: DeparturesStation): void;
 }
 
 export interface MapLayerHandles {
@@ -57,7 +60,11 @@ export function useMapLayers(callbacks: MapLayerCallbacks): MapLayerHandles {
       (text) => cbs.current.onNetworkStatusText(text),
       (data) => cbs.current.onNetworkStatusData(data),
     );
-    const isrOverlays = new IsrOverlays(controller, rail, (key, count) => cbs.current.onOverlayCount(key, count));
+    const isrOverlays = new IsrOverlays(
+      controller, rail,
+      (key, count) => cbs.current.onOverlayCount(key, count),
+      (station) => cbs.current.onShowDepartures(station),
+    );
     const routeLayer = new RouteLayer(controller);
     const nearby = new NearbyPicker(controller);
     railNetwork.current = rail;

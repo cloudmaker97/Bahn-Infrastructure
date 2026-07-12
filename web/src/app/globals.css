@@ -152,6 +152,49 @@ code { background:var(--field); padding:1px 4px; border-radius:4px; font-size:11
 .maplibregl-ctrl-attrib { background:rgba(22,27,34,.85) !important; color:var(--muted); }
 .maplibregl-ctrl-attrib a { color:var(--accent); }
 
+/* Departures panel (bottom right, above the version badge) + collapsed toggle */
+.departures-toggle {
+  position:fixed; z-index:1000; right:10px; bottom:44px;
+  background:var(--panel); color:var(--txt); border:1px solid var(--border);
+  border-radius:10px; padding:7px 12px; font-size:12px; font-weight:600; cursor:pointer;
+  box-shadow:0 2px 12px rgba(0,0,0,.45);
+}
+.departures-toggle:hover { border-color:var(--accent); }
+.departures {
+  position:fixed; z-index:1000; right:10px; bottom:44px;
+  width:340px; max-width:calc(100vw - 20px);
+  max-height:min(480px, calc(100dvh - 100px));
+  display:flex; flex-direction:column;
+  background:var(--panel); color:var(--txt); border:1px solid var(--border);
+  border-radius:10px; font-size:13px; overflow:hidden;
+  box-shadow:0 2px 12px rgba(0,0,0,.45);
+}
+.departures-head { display:flex; align-items:center; gap:8px; padding:10px 12px 8px; }
+.departures-title { flex:1; min-width:0; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.departures-close { background:none; border:none; color:var(--muted); cursor:pointer;
+  font-size:15px; line-height:1; padding:0 2px; }
+.departures-close:hover { color:var(--txt); }
+.departures-search { padding:0 12px 10px; border-bottom:1px solid var(--border); }
+.departures-search input {
+  width:100%; padding:7px 9px; border-radius:7px; font-size:12px;
+  border:1px solid var(--field-border); background:var(--field); color:var(--txt);
+}
+.departures-search input:focus { outline:none; border-color:var(--accent); }
+.departures-body { overflow-y:auto; padding:4px 12px 10px; }
+.dep-row { padding:6px 0; border-bottom:1px solid var(--border); font-size:12px; }
+.dep-row:last-child { border-bottom:none; }
+.dep-line1 { display:flex; align-items:baseline; gap:6px; }
+.dep-time { font-variant-numeric:tabular-nums; font-weight:600; }
+.dep-delay { color:var(--danger); font-size:11px; font-weight:600; }
+.dep-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dep-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; }
+.dep-track { color:var(--muted); font-size:11px; white-space:nowrap; }
+.dep-dest { color:var(--muted); margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dep-cancelled .dep-time, .dep-cancelled .dep-name, .dep-cancelled .dep-dest { text-decoration:line-through; }
+.dep-cancelled-note { color:var(--danger); font-size:11px; font-weight:600; white-space:nowrap; }
+/* "Nächste Abfahrten" action inside the operating-point popup */
+.popup-departures-btn { width:100%; margin-top:10px; }
+
 /* Responsive: dock narrower on small viewports */
 @media (max-width:640px) {
   .panel { width:min(320px, 86vw); }
