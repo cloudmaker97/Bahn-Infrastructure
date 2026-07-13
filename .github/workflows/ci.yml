@@ -49,6 +49,9 @@ jobs:
       - name: Selftest – trip details (service + normalization)
         run: npx tsx src/data/trip-details.selftest.ts
 
+      - name: Selftest – departures (service + normalization)
+        run: npx tsx src/data/departures.selftest.ts
+
       - name: Selftest – alignment resolver
         run: npx tsx src/routing/alignment-resolver.selftest.ts
 

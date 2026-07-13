@@ -5,6 +5,7 @@
 import type { LayerSpecification, MapGeoJSONFeature } from 'maplibre-gl';
 import { getGeoJson } from '@/lib/api';
 import { escapeHtml, tablePopupHtml } from '@/lib/format';
+import type { DeparturesStation } from '@/lib/types';
 import { TRAINS_LAYER_ID } from './common';
 import type { MapController } from './controller';
 import type { RailNetworkLayer } from './rail-network';
@@ -117,16 +118,37 @@ export class IsrOverlays {
     private controller: MapController,
     private railNetwork: RailNetworkLayer,
     private onCount: (key: OverlayKey, count: number) => void,
+    private onShowDepartures: (station: DeparturesStation) => void,
   ) {
     for (const def of DEFS) {
       controller.registerInteractive(layerId(def.key), {
-        popupHtml: (f: MapGeoJSONFeature) =>
-          def.popupHtml(f.properties as Record<string, unknown>, this.railNetwork),
+        popupHtml: (f: MapGeoJSONFeature) => {
+          const html = def.popupHtml(f.properties as Record<string, unknown>, this.railNetwork);
+          // Operating points additionally get a "next departures" action.
+          return def.key === 'stations' ? this.withDeparturesButton(html, f) : html;
+        },
         kindLabel: () => def.kind,
         nearbyLabel: (f: MapGeoJSONFeature) => def.nearbyLabel(f.properties as Record<string, unknown>),
         dotColor: () => def.color,
       });
     }
+  }
+
+  /** Wraps the popup HTML in a DOM node and appends the departures button. */
+  private withDeparturesButton(html: string, f: MapGeoJSONFeature): HTMLElement {
+    const el = document.createElement('div');
+    el.innerHTML = html;
+    if (f.geometry?.type === 'Point') {
+      const [lon, lat] = f.geometry.coordinates as [number, number];
+      const name = String((f.properties as Record<string, unknown>)['BST_STELLE_NAME'] || 'Betriebsstelle');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-primary popup-departures-btn';
+      btn.textContent = 'Nächste Abfahrten';
+      btn.addEventListener('click', () => this.onShowDepartures({ name, lat, lon }));
+      el.appendChild(btn);
+    }
+    return el;
   }
 
   /** Loads all five files in parallel; a failing file -> no entry. */

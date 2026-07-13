@@ -5,6 +5,7 @@ import type { RouteService } from '../routing/route-service.js';
 import type { NetworkStatusService } from '../data/network-status/service.js';
 import type { LiveTripsService } from '../data/live-trips-service.js';
 import type { TripDetailsService } from '../data/trip-details-service.js';
+import type { DeparturesService } from '../data/departures-service.js';
 import type { SseHub } from './sse-hub.js';
 import type { EntitySearch, RouteMode, StationSuggester } from '../types.js';
 
@@ -16,6 +17,7 @@ export interface ApiRouterDeps {
   networkStatus: NetworkStatusService;
   liveTrips: LiveTripsService;
   tripDetails: TripDetailsService;
+  departures: DeparturesService;
   sse: SseHub;
   version: string;
 }
@@ -25,7 +27,7 @@ export class ApiRouter {
 
   /** Tries to handle the path as an API request. true = handled. */
   handle(pathname: string, params: URLSearchParams, res: ServerResponse): boolean {
-    const { routes, suggester, search, networkStatus, liveTrips, tripDetails, sse, version } = this.deps;
+    const { routes, suggester, search, networkStatus, liveTrips, tripDetails, departures, sse, version } = this.deps;
     switch (pathname) {
       case '/api/route': {
         const mode: RouteMode = params.get('mode') === 'short' ? 'short' : 'fast';
@@ -57,6 +59,13 @@ export class ApiRouter {
         // Async: getTrip() never throws – errors land in the error field.
         void tripDetails.getTrip(params.get('tripId') ?? '').then((r) => this.json(res, 200, r));
         return true;
+      case '/api/departures': {
+        // Async: getDepartures() never throws – errors land in the error field.
+        const lat = Number(params.get('lat'));
+        const lon = Number(params.get('lon'));
+        void departures.getDepartures(lat, lon).then((r) => this.json(res, 200, r));
+        return true;
+      }
       case '/api/version':
         this.json(res, 200, { version });
         return true;

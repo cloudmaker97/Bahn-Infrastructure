@@ -8,7 +8,15 @@ export type { TrainDTO };
 export type {
   VersionInfo, LiveTripsResult, LatLng, StationSuggestion,
   TripStopDTO, TripDetailsResult,
+  DepartureDTO, DeparturesResult,
   RouteMode, RouteWaypoint, RouteSegment, RouteResult, RouteError, RouteResponse,
   NetworkStatusCategory, EffectDTO, ValidityDTO,
   AggregateNoticeDTO, DisruptionNoticeDTO, NetworkStatusResult,
 } from '@shared/api-types';
+
+/** UI selection for the departures panel (operating-point click or station search). */
+export interface DeparturesStation {
+  name: string;
+  lat: number;
+  lon: number;
+}

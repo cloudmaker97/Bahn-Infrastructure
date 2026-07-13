@@ -4,11 +4,12 @@
 // React UI state (color mode, visibilities, status lines, counters) and lays
 // out the panel, layer control, and version badge. All visible text is German.
 import { useEffect, useState } from 'react';
-import type { RouteResult } from '@/lib/types';
+import type { DeparturesStation, RouteResult } from '@/lib/types';
 import { OVERLAY_ENTRIES, type OverlayKey } from '@/map/isr-overlays';
 import { type NetworkStatusCategory, type NetworkStatusPanelData } from '@/map/network-status';
 import { type ColorMode } from '@/map/rail-network';
 import AggregateNotices from './AggregateNotices';
+import DeparturesPanel from './DeparturesPanel';
 import LayerControl, { type LayerEntry } from './LayerControl';
 import RoutingForm from './RoutingForm';
 import SearchForm from './SearchForm';
@@ -28,6 +29,10 @@ export default function MapApp() {
     disruption: true, construction: false, closure: false,
   });
   const [overlayOn, setOverlayOn] = useState<Partial<Record<OverlayKey, boolean>>>({});
+  // Departures panel: closed by default; opens via the operating-point popup
+  // button or the collapsed "Abfahrten" toggle at the bottom right.
+  const [departuresOpen, setDeparturesOpen] = useState(false);
+  const [departuresStation, setDeparturesStation] = useState<DeparturesStation | null>(null);
 
   const [railNetworkStatus, setRailNetworkStatus] = useState<RailNetworkStatus>({ text: 'Lade Daten …', frac: null });
   const [networkStatusText, setNetworkStatusText] = useState('');
@@ -41,6 +46,10 @@ export default function MapApp() {
     onNetworkStatusData: setNetworkStatusData,
     onTrainsStatus: setTrainsStatus,
     onOverlayCount: (key, count) => setOverlayCounts((prev) => ({ ...prev, [key]: count })),
+    onShowDepartures: (station) => {
+      setDeparturesStation(station);
+      setDeparturesOpen(true);
+    },
   });
 
   // Pass the UI state down to the (imperative) layers.
@@ -132,6 +141,17 @@ export default function MapApp() {
         noticesSlot={<AggregateNotices items={networkStatusData?.aggregateNotices ?? []} />}
       />
       <LayerControl items={layerItems} onToggle={handleToggle} />
+      {departuresOpen ? (
+        <DeparturesPanel
+          station={departuresStation}
+          onSelectStation={setDeparturesStation}
+          onClose={() => setDeparturesOpen(false)}
+        />
+      ) : (
+        <button type="button" className="departures-toggle" onClick={() => setDeparturesOpen(true)}>
+          Abfahrten
+        </button>
+      )}
       <VersionBadge />
     </>
   );

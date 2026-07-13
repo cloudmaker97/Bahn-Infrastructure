@@ -43,6 +43,11 @@ export const TRIP_API = 'https://api.transitous.org/api/v6/trip';
 /** Cache duration of trip details per tripId (delays change, lines rarely). */
 export const TRIP_TTL_MS = 30_000;
 
+/** Transitous stoptimes – source of the next departures at a station. */
+export const DEPARTURES_API = 'https://api.transitous.org/api/v6/stoptimes';
+/** Cache duration of departures per station coordinate (delays change often). */
+export const DEPARTURES_TTL_MS = 30_000;
+
 /** All layers that are scraped and/or built into the map. */
 export interface LayerDef {
   key: string;
