@@ -3,7 +3,7 @@
 // upstream fetch + short TTL cache per tripId (SRP). The normalization is a
 // pure exported function and fetch is injectable (DIP), so the service is
 // testable without network access (pattern as in LiveTripsService).
-import { TRIP_API, TRIP_TTL_MS } from '../config.js';
+import { TRANSITOUS_HEADERS, TRIP_API, TRIP_TTL_MS } from '../config.js';
 import { SingleFlight, TtlCache } from '../core/ttl-cache.js';
 import type { TripDetailsResult, TripStopDTO } from '../shared/api-types.js';
 
@@ -138,6 +138,7 @@ export class TripDetailsService {
     const previous = this.cache.getStale(tripId);
     try {
       const res = await this.fetchFn(this.buildUrl(tripId), {
+        headers: TRANSITOUS_HEADERS, // without an identifying UA Transitous replies 403
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status} bei trip`);

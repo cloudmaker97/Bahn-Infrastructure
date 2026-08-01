@@ -33,6 +33,23 @@ export const NETWORK_STATUS_WS = 'wss://strecken-info.de/api/websocket';
 /** Cache duration of the network-status data (ms) – limits requests to strecken-info.de. */
 export const NETWORK_STATUS_TTL_MS = 3 * 60 * 1000;
 
+/**
+ * User agent for every Transitous request. Node's fetch sends
+ * `User-Agent: node` by default and api.transitous.org answers that (and a
+ * missing UA) with HTTP 403 – without an identifying agent every live query
+ * fails. Transitous asks API users to identify themselves, so we send an
+ * app-specific agent; TRANSITOUS_USER_AGENT overrides it (e.g. to add a
+ * contact address for a public deployment).
+ */
+export const TRANSITOUS_USER_AGENT = process.env.TRANSITOUS_USER_AGENT
+  || 'bahn-isr/1.0 (+https://github.com/cloudmaker97/Bahn-Infrastructure)';
+
+/** Headers for every Transitous request (map/trips, trip, stoptimes). */
+export const TRANSITOUS_HEADERS: Record<string, string> = {
+  'User-Agent': TRANSITOUS_USER_AGENT,
+  Accept: 'application/json',
+};
+
 /** Transitous map/trips – source of the live train positions (server is authoritative). */
 export const LIVETRIPS_API = 'https://api.transitous.org/api/v6/map/trips';
 /** Burst cache per zoom bucket (rate-limit protection towards Transitous). */

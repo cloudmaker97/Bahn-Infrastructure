@@ -22,5 +22,10 @@ Der Server ist federführend für alle Daten: Live-Züge kommen über `/api/live
 (Transitous-Proxy mit 10-s-Burst-Cache), die Betriebslage über `/api/streckeninfo`.
 Die ISR-Daten werden alle 12 Stunden automatisch neu geladen (Scrape + Rebuild +
 Hot-Reload); `DATA_REFRESH_HOURS` übersteuert das Intervall, `0` deaktiviert es.
+Alle Transitous-Abfragen (Live-Züge, Fahrtverlauf, Abfahrten) senden einen
+identifizierenden User-Agent – ohne den antwortet `api.transitous.org` mit
+HTTP 403 (Node schickt per Default nur `node`). `TRANSITOUS_USER_AGENT`
+übersteuert ihn, z. B. um bei einem öffentlichen Deployment eine
+Kontaktadresse zu hinterlegen.
 Die Kartensuche findet Streckennummern, RL100-Betriebsstellen und Live-Züge
 (vollständiger Name wie „ICE 577" oder reine Zugnummer).

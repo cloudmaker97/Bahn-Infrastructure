@@ -135,8 +135,10 @@ function stopTime(over: Record<string, unknown> = {}): Record<string, unknown> {
 {
   const rawResponse = { place: { name: 'Hamburg Hbf' }, stopTimes: [stopTime()] };
   const urls: string[] = [];
-  const fakeFetch = (async (input: Parameters<typeof fetch>[0]) => {
+  const inits: (RequestInit | undefined)[] = [];
+  const fakeFetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     urls.push(String(input));
+    inits.push(init);
     return new Response(JSON.stringify(rawResponse), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -157,6 +159,12 @@ function stopTime(over: Record<string, unknown> = {}): Record<string, unknown> {
   assert.strictEqual(u.searchParams.get('n'), '20', 'n=20 (headroom for deduping)');
   assert.strictEqual(u.searchParams.get('arriveBy'), 'false', 'arriveBy=false');
   assert.ok(u.searchParams.get('mode')!.includes('HIGHSPEED_RAIL'), 'railway mode filter');
+
+  // Regression: Transitous answers 403 without an identifying User-Agent
+  // (Node's fetch default is "node") – every request must carry ours.
+  const sentUa = new Headers(inits[0]?.headers).get('user-agent') ?? '';
+  assert.ok(sentUa.length > 0, 'stoptimes request sends a User-Agent');
+  assert.ok(!/^(node|undici)$/i.test(sentUa), `User-Agent must identify the app: ${sentUa}`);
   assert.ok(!u.searchParams.get('mode')!.includes('BUS'), 'no bus mode');
   assert.strictEqual(u.searchParams.get('language'), 'de', 'language=de');
 

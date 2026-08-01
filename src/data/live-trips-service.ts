@@ -3,7 +3,7 @@
 // burst cache per zoom bucket (SRP). The pure normalization lives in
 // src/shared/ (DRY); fetch is injectable (DIP) so the service is testable
 // without network access.
-import { LIVETRIPS_API, LIVETRIPS_TTL_MS } from '../config.js';
+import { LIVETRIPS_API, LIVETRIPS_TTL_MS, TRANSITOUS_HEADERS } from '../config.js';
 import { ringsBbox } from '../shared/geo.js';
 import { DE_BOUNDARY_RINGS } from '../shared/de-boundary.js';
 import { normalizeTrips } from '../shared/live-trips-core.js';
@@ -84,6 +84,7 @@ export class LiveTripsService {
     const previous = this.cache.getStale(bucket);
     try {
       const res = await this.fetchFn(this.buildUrl(bucket, nowMs), {
+        headers: TRANSITOUS_HEADERS, // without an identifying UA Transitous replies 403
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status} bei map/trips`);

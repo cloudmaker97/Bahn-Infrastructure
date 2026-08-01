@@ -93,8 +93,10 @@ function place(name: string, opts: Record<string, unknown> = {}): Record<string,
     }],
   };
   const urls: string[] = [];
-  const fakeFetch = (async (input: Parameters<typeof fetch>[0]) => {
+  const inits: (RequestInit | undefined)[] = [];
+  const fakeFetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     urls.push(String(input));
+    inits.push(init);
     return new Response(JSON.stringify(rawTrip), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -114,6 +116,12 @@ function place(name: string, opts: Record<string, unknown> = {}): Record<string,
   assert.strictEqual(u.searchParams.get('tripId'), tripId, 'tripId in the URL (encoded roundtrip)');
   assert.strictEqual(u.searchParams.get('joinInterlinedLegs'), 'false', 'joinInterlinedLegs=false');
   assert.strictEqual(u.searchParams.get('language'), 'de', 'language=de');
+
+  // Regression: Transitous answers 403 without an identifying User-Agent
+  // (Node's fetch default is "node") – every request must carry ours.
+  const sentUa = new Headers(inits[0]?.headers).get('user-agent') ?? '';
+  assert.ok(sentUa.length > 0, 'trip request sends a User-Agent');
+  assert.ok(!/^(node|undici)$/i.test(sentUa), `User-Agent must identify the app: ${sentUa}`);
 
   // Burst cache: an immediate second call for the same trip -> NO further upstream call.
   const r2 = await svc.getTrip(tripId);

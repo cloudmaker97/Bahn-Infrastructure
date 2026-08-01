@@ -175,8 +175,10 @@ function near(actual: number, expected: number, tol: number, msg: string): void 
     trips: [{ tripId: 'trip-re', displayName: 'RE 30' }],
   };
   const urls: string[] = [];
-  const fakeFetch = (async (input: Parameters<typeof fetch>[0]) => {
+  const inits: (RequestInit | undefined)[] = [];
+  const fakeFetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     urls.push(String(input));
+    inits.push(init);
     return new Response(JSON.stringify([segment]), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -219,6 +221,12 @@ function near(actual: number, expected: number, tol: number, msg: string): void 
   near(max[1]!, 15.1, 0.3, 'max lon (DE east)');
   assert.ok(u.searchParams.get('startTime'), 'startTime set');
   assert.ok(u.searchParams.get('endTime'), 'endTime set');
+
+  // Regression: Transitous answers 403 without an identifying User-Agent
+  // (Node's fetch default is "node") – every request must carry ours.
+  const sentUa = new Headers(inits[0]?.headers).get('user-agent') ?? '';
+  assert.ok(sentUa.length > 0, 'map/trips request sends a User-Agent');
+  assert.ok(!/^(node|undici)$/i.test(sentUa), `User-Agent must identify the app: ${sentUa}`);
 
   // Error path: ttlMs=0 (cache off) + throwing fetch -> error set, trains empty, NO throw.
   const broken = (async () => {

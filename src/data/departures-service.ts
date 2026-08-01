@@ -5,7 +5,7 @@
 // coordinate (SRP). The normalization is a pure exported function and fetch is
 // injectable (DIP), so the service is testable without network access
 // (pattern as in LiveTripsService/TripDetailsService).
-import { DEPARTURES_API, DEPARTURES_TTL_MS } from '../config.js';
+import { DEPARTURES_API, DEPARTURES_TTL_MS, TRANSITOUS_HEADERS } from '../config.js';
 import { SingleFlight, TtlCache } from '../core/ttl-cache.js';
 import { categoryOf, isRailMode, RAIL_MODES } from '../shared/live-trips-core.js';
 import type { DepartureDTO, DeparturesResult } from '../shared/api-types.js';
@@ -185,6 +185,7 @@ export class DeparturesService {
     const previous = this.cache.getStale(key);
     try {
       const res = await this.fetchFn(this.buildUrl(lat, lon), {
+        headers: TRANSITOUS_HEADERS, // without an identifying UA Transitous replies 403
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status} bei stoptimes`);
