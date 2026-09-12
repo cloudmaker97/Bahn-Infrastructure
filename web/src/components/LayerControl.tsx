@@ -1,8 +1,10 @@
 'use client';
 
-// Layer control at the top right (panel look): checkbox rows, optionally
-// indented (sub-filters) and with de-DE-formatted counters; dividers separate
-// the groups (live/network status vs. ISR overlays).
+// Layer control at the top right (panel look): basemap switcher, checkbox
+// rows, optionally indented (sub-filters) and with de-DE-formatted counters;
+// dividers separate the groups (live/network status vs. ISR overlays).
+import { BASEMAP_OPTIONS, type BasemapId } from '@/map/basemap';
+import SegmentedControl from './SegmentedControl';
 
 /** One checkbox entry of the layer control. */
 export interface LayerItem {
@@ -26,11 +28,23 @@ export type LayerEntry = LayerItem | LayerDivider;
 interface LayerControlProps {
   items: LayerEntry[];
   onToggle: (key: string, on: boolean) => void;
+  basemap: BasemapId;
+  onBasemapChange: (id: BasemapId) => void;
 }
 
-export default function LayerControl({ items, onToggle }: LayerControlProps) {
+export default function LayerControl({ items, onToggle, basemap, onBasemapChange }: LayerControlProps) {
   return (
     <div className="layerctl">
+      <div className="layerctl-head">
+        <span className="layerctl-kicker">Karte</span>
+        <SegmentedControl
+          ariaLabel="Kartenstil"
+          value={basemap}
+          onChange={onBasemapChange}
+          options={BASEMAP_OPTIONS.map((o) => ({ value: o.id, label: o.label }))}
+        />
+      </div>
+      <hr className="lc-sep" />
       {items.map((item) => {
         if ('divider' in item) return <hr key={item.key} className="lc-sep" />;
         const text = item.count != null

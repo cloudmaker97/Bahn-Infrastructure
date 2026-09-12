@@ -4,8 +4,9 @@
 // layer modules once, wires their status callbacks, and tears everything down
 // on unmount. MapApp stays a thin React component on top (SRP: construction/
 // lifecycle here, UI state there).
-import { useEffect, useRef, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, type RefObject } from 'react';
 import type { DeparturesStation } from '@/lib/types';
+import type { BasemapId } from '@/map/basemap';
 import { MapController } from '@/map/controller';
 import { IsrOverlays, type OverlayKey } from '@/map/isr-overlays';
 import { NearbyPicker } from '@/map/nearby';
@@ -33,9 +34,13 @@ export interface MapLayerHandles {
   overlays: RefObject<IsrOverlays | null>;
   route: RefObject<RouteLayer | null>;
   search: RefObject<MapSearch | null>;
+  setBasemap(id: BasemapId): void;
 }
 
-export function useMapLayers(callbacks: MapLayerCallbacks): MapLayerHandles {
+export function useMapLayers(
+  callbacks: MapLayerCallbacks,
+  initialBasemap: BasemapId,
+): MapLayerHandles {
   const mapDiv = useRef<HTMLDivElement | null>(null);
   const railNetwork = useRef<RailNetworkLayer | null>(null);
   const trains = useRef<TrainsLayer | null>(null);
@@ -43,6 +48,8 @@ export function useMapLayers(callbacks: MapLayerCallbacks): MapLayerHandles {
   const overlays = useRef<IsrOverlays | null>(null);
   const route = useRef<RouteLayer | null>(null);
   const search = useRef<MapSearch | null>(null);
+  const setBasemapRef = useRef<(id: BasemapId) => void>(() => { /* map not ready */ });
+  const initialBasemapRef = useRef(initialBasemap);
 
   // The callbacks only forward into React state setters (stable); keep the
   // latest set in a ref so the one-time construction effect never goes stale.
@@ -52,7 +59,8 @@ export function useMapLayers(callbacks: MapLayerCallbacks): MapLayerHandles {
   // Build map + layers once (and tear everything down on unmount).
   useEffect(() => {
     if (!mapDiv.current) return;
-    const controller = new MapController(mapDiv.current);
+    const controller = new MapController(mapDiv.current, initialBasemapRef.current);
+    setBasemapRef.current = (id) => controller.setBasemap(id);
     const rail = new RailNetworkLayer(controller, (text, frac) => cbs.current.onRailStatus(text, frac));
     const trainsLayer = new TrainsLayer(controller, (text) => cbs.current.onTrainsStatus(text), { realtimeOnly: true });
     const status = new NetworkStatusLayers(
@@ -97,8 +105,11 @@ export function useMapLayers(callbacks: MapLayerCallbacks): MapLayerHandles {
       overlays.current = null;
       route.current = null;
       search.current = null;
+      setBasemapRef.current = () => { /* map disposed */ };
     };
   }, []);
 
-  return { mapDiv, railNetwork, trains, networkStatus, overlays, route, search };
+  const setBasemap = useCallback((id: BasemapId) => setBasemapRef.current(id), []);
+
+  return { mapDiv, railNetwork, trains, networkStatus, overlays, route, search, setBasemap };
 }

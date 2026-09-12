@@ -1,10 +1,13 @@
-// Wraps the MapLibre map behind a slim, React-free API (SRP): map setup (dark
-// CARTO raster basemap), source/layer helpers, popup, hit queries, and an event
-// registry for interactive layers.
+// Wraps the MapLibre map behind a slim, React-free API (SRP): map setup
+// (vector GL basemap from tiles.map.apps.dennis-heinri.ch), source/layer
+// helpers, popup, hit queries, and an event registry for interactive layers.
 import maplibregl from 'maplibre-gl';
 import type {
   GeoJSONSource, LayerSpecification, LngLatLike, MapGeoJSONFeature, MapMouseEvent,
 } from 'maplibre-gl';
+import {
+  DATA_ATTRIBUTION, DEFAULT_BASEMAP, styleUrl, type BasemapId,
+} from './basemap';
 
 /** Description of an interactive layer (click popup + right-click list). */
 export interface InteractiveSpec {
@@ -32,55 +35,62 @@ export class MapController {
 
   private ready = false;
   private readyCbs: Array<() => void> = [];
+  /** Persistent listeners: fire on every style.load (including the first). */
+  private styleLoadCbs: Array<() => void> = [];
   private interactive = new Map<string, InteractiveSpec>();
   private hovered = new Set<string>();
   private popup: maplibregl.Popup | null = null;
+  private basemapId: BasemapId;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, initialBasemap: BasemapId = DEFAULT_BASEMAP) {
+    this.basemapId = initialBasemap;
     this.map = new maplibregl.Map({
       container,
-      // Inline style: dark CARTO raster basemap (keyless; the only direct
-      // external access of the browser – all data APIs go through our server).
-      style: {
-        version: 8,
-        sources: {
-          basemap: {
-            type: 'raster',
-            tiles: [
-              'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-              'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-              'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-            ],
-            tileSize: 256,
-            attribution:
-              '© OpenStreetMap-Mitwirkende © CARTO · Daten: ' +
-              '<a href="https://geoviewer.deutschebahn.com/maps/#/context/ISR/275618" target="_blank" rel="noopener">DB InfraGO</a>' +
-              ' · Live-Züge: <a href="https://transitous.org/sources" target="_blank" rel="noopener">Transitous</a>',
-          },
-        },
-        layers: [{ id: 'basemap', type: 'raster', source: 'basemap' }],
-      },
+      style: styleUrl(initialBasemap),
       center: [10.4, 51.2],
       zoom: 5,
-      attributionControl: { compact: false },
+      attributionControl: { compact: false, customAttribution: DATA_ATTRIBUTION },
     });
 
-    this.map.on('load', () => {
-      this.ready = true;
-      const cbs = this.readyCbs;
-      this.readyCbs = [];
-      for (const cb of cbs) cb();
-    });
+    // style.load fires for the initial style and after every setStyle – overlays
+    // re-attach there. `load` only fires once and is too late for style swaps.
+    this.map.on('style.load', () => this.handleStyleLoad());
 
     // One global click handler for all interactive layers: the topmost feature
     // wins (queryRenderedFeatures returns in render order, top first).
     this.map.on('click', (e: MapMouseEvent) => this.handleClick(e));
   }
 
-  /** Runs cb once the map style is loaded (or immediately when already ready). */
+  getBasemap(): BasemapId {
+    return this.basemapId;
+  }
+
+  /**
+   * Swaps the vector GL basemap. Custom overlay sources/layers are dropped by
+   * setStyle; registered onStyleLoad callbacks re-add them.
+   */
+  setBasemap(id: BasemapId): void {
+    if (id === this.basemapId) return;
+    this.basemapId = id;
+    this.ready = false;
+    this.popup?.remove();
+    this.popup = null;
+    this.map.setStyle(styleUrl(id));
+  }
+
+  /** Runs cb once the current style is loaded (or immediately when already ready). */
   onReady(cb: () => void): void {
     if (this.ready) cb();
     else this.readyCbs.push(cb);
+  }
+
+  /**
+   * Fires on every style.load (including the first). Overlay modules use this
+   * to re-create sources/layers after a basemap switch.
+   */
+  onStyleLoad(cb: () => void): void {
+    this.styleLoadCbs.push(cb);
+    if (this.ready) cb();
   }
 
   /**
@@ -94,6 +104,7 @@ export class MapController {
 
   /** Creates a GeoJSON source or updates its data (idempotent). */
   addOrSetGeoJson(id: string, data: GeoJSON.GeoJSON): void {
+    if (!this.ready || !this.map.isStyleLoaded()) return;
     const source = this.map.getSource(id) as GeoJSONSource | undefined;
     if (source) source.setData(data);
     else this.map.addSource(id, { type: 'geojson', data });
@@ -101,6 +112,7 @@ export class MapController {
 
   /** Adds a layer only when it does not exist yet. */
   addLayerOnce(layerSpec: LayerSpecification, before?: string): void {
+    if (!this.ready || !this.map.isStyleLoaded()) return;
     if (this.map.getLayer(layerSpec.id)) return;
     // Use `before` only when the target layer exists (robust against load order).
     this.map.addLayer(layerSpec, before && this.map.getLayer(before) ? before : undefined);
@@ -170,6 +182,14 @@ export class MapController {
     this.popup?.remove();
     this.popup = null;
     this.map.remove();
+  }
+
+  private handleStyleLoad(): void {
+    this.ready = true;
+    const queued = this.readyCbs;
+    this.readyCbs = [];
+    for (const cb of queued) cb();
+    for (const cb of this.styleLoadCbs) cb();
   }
 
   private handleClick(e: MapMouseEvent): void {

@@ -130,9 +130,10 @@ export class TrainsLayer {
     this.longDistanceOnly = opts.longDistanceOnly ?? false;
     this.tooltip = new HoverTooltip(controller.map);
 
-    controller.onReady(() => {
+    controller.onStyleLoad(() => {
       this.ensureLayer();
       this.layerReady = true;
+      if (this.active) this.renderFrame();
     });
 
     // Click: detail popup via the interactive registry (topmost feature wins).

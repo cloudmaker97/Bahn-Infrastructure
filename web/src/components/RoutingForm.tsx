@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getRoute, getStations } from '@/lib/api';
 import type { RouteMode, RouteResult, StationSuggestion } from '@/lib/types';
+import SegmentedControl from './SegmentedControl';
 
 /** Autocomplete delay as in the old frontend. */
 const AUTOCOMPLETE_DEBOUNCE_MS = 150;
@@ -97,10 +98,15 @@ export default function RoutingForm({ onRoute, onClear }: RoutingFormProps) {
         ))}
       </datalist>
       <div className="row" style={{ marginTop: 6 }}>
-        <select id="rMode" value={mode} onChange={(e) => setMode(e.target.value as RouteMode)}>
-          <option value="fast">schnellste (Zeit)</option>
-          <option value="short">kürzeste (Distanz)</option>
-        </select>
+        <SegmentedControl
+          ariaLabel="Routenmodus"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: 'fast', label: 'Schnellste' },
+            { value: 'short', label: 'Kürzeste' },
+          ]}
+        />
         <button type="button" className="btn btn-ok" style={{ flex: '0 0 84px' }} onClick={() => void calculateRoute()}>
           Route
         </button>
