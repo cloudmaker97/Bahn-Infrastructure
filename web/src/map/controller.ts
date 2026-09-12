@@ -31,7 +31,7 @@ export interface InteractiveHit {
 const CLICK_RADIUS_PX = 6;
 /** Left padding matching the docked side panel so flyTo/fitBounds center in the visible map. */
 const DESKTOP_LEFT_PADDING_PX = 332;
-const NARROW_MQ = '(max-width: 767px)';
+const NARROW_MQ = '(max-width: 767px), (max-width: 960px) and (max-height: 500px)';
 
 export class MapController {
   readonly map: maplibregl.Map;
@@ -53,7 +53,7 @@ export class MapController {
       style: styleUrl(initialBasemap),
       center: [10.4, 51.2],
       zoom: 5,
-      attributionControl: { customAttribution: DATA_ATTRIBUTION },
+      attributionControl: { compact: true, customAttribution: DATA_ATTRIBUTION },
     });
 
     this.map.addControl(
@@ -62,6 +62,7 @@ export class MapController {
     );
     this.syncLayout();
     this.map.on('resize', () => this.syncLayout());
+    this.map.once('load', () => this.collapseCompactAttrib());
 
     // style.load fires for the initial style and after every setStyle – overlays
     // re-attach there. `load` only fires once and is too late for style swaps.
@@ -199,9 +200,18 @@ export class MapController {
   /** Desktop: keep geographic center in the map strip beside the docked panel. */
   private syncLayout(): void {
     const left = window.matchMedia(NARROW_MQ).matches ? 0 : DESKTOP_LEFT_PADDING_PX;
-    if (left === this.lastLeftPadding) return;
-    this.lastLeftPadding = left;
-    this.map.setPadding({ top: 0, right: 0, bottom: 0, left });
+    if (left !== this.lastLeftPadding) {
+      this.lastLeftPadding = left;
+      this.map.setPadding({ top: 0, right: 0, bottom: 0, left });
+    }
+    this.collapseCompactAttrib();
+  }
+
+  /** On phones keep the attribution as the compact "i" so it does not collide with Abfahrten. */
+  private collapseCompactAttrib(): void {
+    if (!window.matchMedia(NARROW_MQ).matches) return;
+    const el = this.map.getContainer().querySelector('.maplibregl-ctrl-attrib');
+    if (el instanceof HTMLDetailsElement) el.open = false;
   }
 
   private handleStyleLoad(): void {

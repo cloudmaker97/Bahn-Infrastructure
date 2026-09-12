@@ -4,7 +4,8 @@
 // Keep in sync with `@media (max-width: 767px)` in globals.css.
 import { useEffect, useState } from 'react';
 
-export const NARROW_VIEWPORT_MQ = '(max-width: 767px)';
+export const NARROW_VIEWPORT_MQ =
+  '(max-width: 767px), (max-width: 960px) and (max-height: 500px)';
 
 /** True when the layout should use collapsible drawers instead of docked panels. */
 export function useNarrowViewport(): boolean {
