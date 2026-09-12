@@ -146,6 +146,7 @@ export class NetworkStatusLayers {
       (p) => String(p['works'] || 'Baustelle'));
     this.registerInteractive('closure', 'Streckenruhe', closurePopupHtml,
       (p) => String(p['stationLongName'] || 'Streckenruhe'));
+    controller.onStyleLoad(() => this.restore());
   }
 
   /** Load immediately, then 3-min poll + SSE push (reloads right after a server refresh). */
@@ -189,12 +190,7 @@ export class NetworkStatusLayers {
     try {
       const data = await getNetworkStatus();
       this.lastData = data;
-      this.controller.onReady(() => {
-        this.ensureLayers();
-        this.controller.addOrSetGeoJson(CATEGORY_IDS.disruption.source, asGeoJson(data.disruptions));
-        this.controller.addOrSetGeoJson(CATEGORY_IDS.construction.source, asGeoJson(data.constructionSites));
-        this.applyClosures(asGeoJson(data.lineClosures));
-      });
+      this.controller.onReady(() => this.applyData(data));
       const counts = {
         disruptions: data.counts?.disruptions ?? data.disruptions?.features?.length ?? 0,
         constructionSites: data.counts?.constructionSites ?? data.constructionSites?.features?.length ?? 0,
@@ -245,6 +241,19 @@ export class NetworkStatusLayers {
       }
     }
     this.controller.addOrSetGeoJson(CATEGORY_IDS.closure.source, { type: 'FeatureCollection', features });
+  }
+
+  /** Re-adds sources/layers and last payload after a basemap style swap. */
+  private restore(): void {
+    this.layersReady = false;
+    if (this.lastData) this.applyData(this.lastData);
+  }
+
+  private applyData(data: NetworkStatusResult): void {
+    this.ensureLayers();
+    this.controller.addOrSetGeoJson(CATEGORY_IDS.disruption.source, asGeoJson(data.disruptions));
+    this.controller.addOrSetGeoJson(CATEGORY_IDS.construction.source, asGeoJson(data.constructionSites));
+    this.applyClosures(asGeoJson(data.lineClosures));
   }
 
   /** Create sources + point/line layers per category (once, after style load). */

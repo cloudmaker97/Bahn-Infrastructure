@@ -5,6 +5,7 @@
 // aggregate notices – order as in the old frontend. All visible text is German.
 import type { ReactNode } from 'react';
 import { LEGENDS, type ColorMode } from '@/map/color-scales';
+import SegmentedControl from './SegmentedControl';
 
 /** Status line of the rail-network loading: frac 0..1 = bar, null = indeterminate,
  *  undefined = no bar anymore (done or error). */
@@ -34,17 +35,19 @@ export default function SidePanel({
   return (
     <div className="panel">
       <div className="panel-body">
-        <label htmlFor="colorMode">Einfärbung</label>
-        <select
-          id="colorMode"
+        <label id="colorModeLabel">Einfärbung</label>
+        <SegmentedControl
+          ariaLabel="Einfärbung"
+          columns={2}
           value={colorMode}
-          onChange={(e) => onColorModeChange(e.target.value as ColorMode)}
-        >
-          <option value="electrification">Elektrifizierung</option>
-          <option value="speed">Höchstgeschwindigkeit</option>
-          <option value="tracks">Gleisanzahl</option>
-          <option value="uniform">Einfarbig</option>
-        </select>
+          onChange={onColorModeChange}
+          options={[
+            { value: 'uniform', label: 'Einfarbig' },
+            { value: 'electrification', label: 'Elektrifizierung' },
+            { value: 'speed', label: 'V max' },
+            { value: 'tracks', label: 'Gleisanzahl' },
+          ]}
+        />
 
         {searchSlot}
         {routingSlot}

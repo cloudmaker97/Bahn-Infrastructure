@@ -15,6 +15,7 @@ const POINT_LAYER = 'route-points';
 
 export class RouteLayer {
   private layersReady = false;
+  private lastRoute: RouteResult | null = null;
   private tooltip: HoverTooltip;
 
   constructor(private controller: MapController) {
@@ -23,45 +24,54 @@ export class RouteLayer {
     controller.map.on('mousemove', POINT_LAYER, (e: MapLayerMouseEvent) =>
       this.tooltip.showAt(e, String((e.features?.[0]?.properties as Record<string, unknown>)?.['label'] ?? '')));
     controller.map.on('mouseleave', POINT_LAYER, () => this.tooltip.hide());
+    controller.onStyleLoad(() => {
+      this.layersReady = false;
+      if (this.lastRoute) this.draw(this.lastRoute, false);
+    });
   }
 
   /** Draws the route (line + start/end) and zooms to its full extent. */
   show(route: RouteResult): void {
-    this.controller.onReady(() => {
-      this.ensureLayers();
-      // Rotate [lat, lon] -> [lon, lat] (the server uses the [lat, lon] convention).
-      const lines: GeoJSON.Feature[] = route.segments.map((s) => ({
-        type: 'Feature',
-        geometry: { type: 'LineString', coordinates: s.coords.map(([lat, lon]) => [lon, lat]) },
-        properties: {},
-      }));
-      this.controller.addOrSetGeoJson(LINE_SOURCE, { type: 'FeatureCollection', features: lines });
-
-      const points: GeoJSON.Feature[] = [];
-      const point = (wp: RouteWaypoint, color: string, role: string): void => {
-        if (wp.lat == null || wp.lon == null) return;
-        points.push({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: [wp.lon, wp.lat] },
-          properties: { color, label: `${role}: ${wp.rl100 || ''} ${wp.name || ''}` },
-        });
-      };
-      point(route.from, '#38b48b', 'Start');
-      point(route.to, '#ff2d55', 'Ziel');
-      this.controller.addOrSetGeoJson(POINT_SOURCE, { type: 'FeatureCollection', features: points });
-
-      const bounds = new maplibregl.LngLatBounds();
-      for (const s of route.segments) for (const [lat, lon] of s.coords) bounds.extend([lon, lat]);
-      if (!bounds.isEmpty()) this.controller.map.fitBounds(bounds, { padding: 60 });
-    });
+    this.lastRoute = route;
+    this.controller.onReady(() => this.draw(route, true));
   }
 
   /** Removes the route from the map (clears the sources, the layers stay). */
   clear(): void {
+    this.lastRoute = null;
     this.tooltip.hide();
     if (!this.layersReady) return;
     this.controller.addOrSetGeoJson(LINE_SOURCE, emptyFeatureCollection());
     this.controller.addOrSetGeoJson(POINT_SOURCE, emptyFeatureCollection());
+  }
+
+  private draw(route: RouteResult, fit: boolean): void {
+    this.ensureLayers();
+    // Rotate [lat, lon] -> [lon, lat] (the server uses the [lat, lon] convention).
+    const lines: GeoJSON.Feature[] = route.segments.map((s) => ({
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: s.coords.map(([lat, lon]) => [lon, lat]) },
+      properties: {},
+    }));
+    this.controller.addOrSetGeoJson(LINE_SOURCE, { type: 'FeatureCollection', features: lines });
+
+    const points: GeoJSON.Feature[] = [];
+    const point = (wp: RouteWaypoint, color: string, role: string): void => {
+      if (wp.lat == null || wp.lon == null) return;
+      points.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [wp.lon, wp.lat] },
+        properties: { color, label: `${role}: ${wp.rl100 || ''} ${wp.name || ''}` },
+      });
+    };
+    point(route.from, '#38b48b', 'Start');
+    point(route.to, '#ff2d55', 'Ziel');
+    this.controller.addOrSetGeoJson(POINT_SOURCE, { type: 'FeatureCollection', features: points });
+
+    if (!fit) return;
+    const bounds = new maplibregl.LngLatBounds();
+    for (const s of route.segments) for (const [lat, lon] of s.coords) bounds.extend([lon, lat]);
+    if (!bounds.isEmpty()) this.controller.map.fitBounds(bounds, { padding: 60 });
   }
 
   private ensureLayers(): void {

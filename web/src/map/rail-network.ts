@@ -63,6 +63,10 @@ export class RailNetworkLayer {
   /** STEL_ID (as string) -> attached sections (for operating-point popups). */
   private stationIndex = new Map<string, StationSection[]>();
   private mode: ColorMode = 'uniform';
+  /** Kept so the source can be re-added after a basemap style swap. */
+  private data: GeoJSON.FeatureCollection | null = null;
+  /** Last search highlight (re-applied after a style swap). */
+  private highlightFilter: FilterSpecification = ['==', ['get', 'ISR_STRE_NR'], -1];
 
   /**
    * @param onStatus status line in the panel: frac 0..1 = progress bar,
@@ -84,6 +88,7 @@ export class RailNetworkLayer {
     };
     controller.registerInteractive(LINE_LAYER_ID, spec);
     controller.registerInteractive(HIGHLIGHT_LAYER_ID, spec);
+    controller.onStyleLoad(() => this.applyToMap());
   }
 
   /** Loads the section GeoJSON, builds the indexes, and creates source + layers. */
@@ -94,10 +99,10 @@ export class RailNetworkLayer {
         if (frac == null) return; // indeterminate -> the animated bar stays
         this.onStatus(`Lade Kartendaten … ${Math.round(frac * 100)} %`, frac);
       });
+      this.data = gj;
       this.buildIndexes(gj);
       this.controller.onReady(() => {
-        this.controller.addOrSetGeoJson(SOURCE_ID, gj);
-        this.ensureLayers();
+        this.applyToMap();
         this.onStatus(`${gj.features.length.toLocaleString('de-DE')} Abschnitte geladen`);
       });
     } catch (err) {
@@ -122,9 +127,9 @@ export class RailNetworkLayer {
     if (!feats.length) return 0;
     // Filter on the original value from the data (ISR_STRE_NR is a number there).
     const value = (feats[0]!.properties ?? {})['ISR_STRE_NR'] as string | number;
-    const filter: FilterSpecification = ['==', ['get', 'ISR_STRE_NR'], value];
+    this.highlightFilter = ['==', ['get', 'ISR_STRE_NR'], value];
     if (this.controller.map.getLayer(HIGHLIGHT_LAYER_ID)) {
-      this.controller.map.setFilter(HIGHLIGHT_LAYER_ID, filter);
+      this.controller.map.setFilter(HIGHLIGHT_LAYER_ID, this.highlightFilter);
     }
     const bounds = new maplibregl.LngLatBounds();
     for (const f of feats) extendBounds(bounds, f.geometry);
@@ -134,9 +139,9 @@ export class RailNetworkLayer {
 
   /** Clears the search highlight (e.g. when another result kind wins). */
   clearHighlight(): void {
+    this.highlightFilter = ['==', ['get', 'ISR_STRE_NR'], -1];
     if (this.controller.map.getLayer(HIGHLIGHT_LAYER_ID)) {
-      // Same "highlight nothing" filter as the initial layer state.
-      this.controller.map.setFilter(HIGHLIGHT_LAYER_ID, ['==', ['get', 'ISR_STRE_NR'], -1]);
+      this.controller.map.setFilter(HIGHLIGHT_LAYER_ID, this.highlightFilter);
     }
   }
 
@@ -179,6 +184,13 @@ export class RailNetworkLayer {
     }
   }
 
+  /** Re-adds source + layers (first load and after a basemap style swap). */
+  private applyToMap(): void {
+    if (!this.data) return;
+    this.controller.addOrSetGeoJson(SOURCE_ID, this.data);
+    this.ensureLayers();
+  }
+
   private ensureLayers(): void {
     const lineLayer: LayerSpecification = {
       id: LINE_LAYER_ID,
@@ -190,8 +202,7 @@ export class RailNetworkLayer {
       id: HIGHLIGHT_LAYER_ID,
       type: 'line',
       source: SOURCE_ID,
-      // Highlight nothing initially (ISR_STRE_NR is always >= 0).
-      filter: ['==', ['get', 'ISR_STRE_NR'], -1],
+      filter: this.highlightFilter,
       paint: { 'line-color': '#ff2d55', 'line-width': 3.5 },
     };
     // Insert before the trains layer so the trains render above the lines.

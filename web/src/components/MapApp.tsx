@@ -5,6 +5,7 @@
 // out the panel, layer control, and version badge. All visible text is German.
 import { useEffect, useState } from 'react';
 import type { DeparturesStation, RouteResult } from '@/lib/types';
+import { persistBasemap, readStoredBasemap, type BasemapId } from '@/map/basemap';
 import { OVERLAY_ENTRIES, type OverlayKey } from '@/map/isr-overlays';
 import { type NetworkStatusCategory, type NetworkStatusPanelData } from '@/map/network-status';
 import { type ColorMode } from '@/map/rail-network';
@@ -19,6 +20,11 @@ import VersionBadge from './VersionBadge';
 
 export default function MapApp() {
   const [colorMode, setColorMode] = useState<ColorMode>('uniform');
+  const [basemap, setBasemap] = useState<BasemapId>(() => {
+    const id = readStoredBasemap();
+    document.documentElement.dataset.theme = id;
+    return id;
+  });
   // Defaults: uniform line color ("Einfarbig"), live trains ON, sub-filter
   // "Nur Echtzeit" ON, "Nur Fernverkehr" OFF, disruptions ON,
   // construction/closures and overlays OFF.
@@ -50,7 +56,14 @@ export default function MapApp() {
       setDeparturesStation(station);
       setDeparturesOpen(true);
     },
-  });
+  }, basemap);
+
+  const { setBasemap: applyBasemap } = layers;
+  useEffect(() => {
+    document.documentElement.dataset.theme = basemap;
+    persistBasemap(basemap);
+    applyBasemap(basemap);
+  }, [applyBasemap, basemap]);
 
   // Pass the UI state down to the (imperative) layers.
   useEffect(() => { layers.railNetwork.current?.setColorMode(colorMode); }, [layers, colorMode]);
@@ -140,7 +153,12 @@ export default function MapApp() {
         )}
         noticesSlot={<AggregateNotices items={networkStatusData?.aggregateNotices ?? []} />}
       />
-      <LayerControl items={layerItems} onToggle={handleToggle} />
+      <LayerControl
+        items={layerItems}
+        onToggle={handleToggle}
+        basemap={basemap}
+        onBasemapChange={setBasemap}
+      />
       {departuresOpen ? (
         <DeparturesPanel
           station={departuresStation}

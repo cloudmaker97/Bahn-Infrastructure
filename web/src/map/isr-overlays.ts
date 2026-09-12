@@ -132,6 +132,7 @@ export class IsrOverlays {
         dotColor: () => def.color,
       });
     }
+    controller.onStyleLoad(() => this.restoreLayers());
   }
 
   /** Wraps the popup HTML in a DOM node and appends the departures button. */
@@ -176,6 +177,14 @@ export class IsrOverlays {
       if (on && !this.added.has(key)) this.ensureLayer(def);
       this.controller.setVisible(layerId(key), on);
     });
+  }
+
+  /** Re-creates currently visible overlay layers after a basemap style swap. */
+  private restoreLayers(): void {
+    this.added.clear();
+    for (const def of DEFS) {
+      if (this.visible.get(def.key)) this.ensureLayer(def);
+    }
   }
 
   private ensureLayer(def: OverlayDef): void {
