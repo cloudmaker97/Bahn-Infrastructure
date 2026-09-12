@@ -1,8 +1,8 @@
 'use client';
 
-// Left, docked side panel (no header): color mode, line search, route finding,
-// legend, status-line block (rail network / network status / live trains) and
-// aggregate notices – order as in the old frontend. All visible text is German.
+// Left side panel: color mode, line search, route finding, legend, status
+// lines and aggregate notices. Docked on desktop; a drawer overlay on narrow
+// viewports. All visible text is German.
 import type { ReactNode } from 'react';
 import { LEGENDS, type ColorMode } from '@/map/color-scales';
 import SegmentedControl from './SegmentedControl';
@@ -25,15 +25,30 @@ interface SidePanelProps {
   searchSlot?: ReactNode;
   routingSlot?: ReactNode;
   noticesSlot?: ReactNode;
+  /** Mobile drawer: open class, dialog semantics, and close control. */
+  open?: boolean;
+  onClose?: () => void;
+  narrow?: boolean;
 }
 
 export default function SidePanel({
   colorMode, onColorModeChange, railNetworkStatus, networkStatusText, trainsStatus,
-  searchSlot, routingSlot, noticesSlot,
+  searchSlot, routingSlot, noticesSlot, open = false, onClose, narrow = false,
 }: SidePanelProps) {
   const { text, frac } = railNetworkStatus;
   return (
-    <div className="panel">
+    <aside
+      id="side-panel"
+      className={open ? 'panel is-open' : 'panel'}
+      role={narrow ? 'dialog' : 'complementary'}
+      aria-modal={narrow && open ? true : undefined}
+      aria-label="Suche und Route"
+      inert={narrow && !open ? true : undefined}
+    >
+      <div className="drawer-head">
+        <span className="drawer-kicker">Suche &amp; Route</span>
+        <button type="button" className="drawer-close" aria-label="Menü schließen" onClick={onClose}>✕</button>
+      </div>
       <div className="panel-body">
         <label id="colorModeLabel">Einfärbung</label>
         <SegmentedControl
@@ -77,6 +92,6 @@ export default function SidePanel({
 
         {noticesSlot}
       </div>
-    </div>
+    </aside>
   );
 }

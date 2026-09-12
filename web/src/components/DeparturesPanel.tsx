@@ -95,7 +95,14 @@ export default function DeparturesPanel({ station, onSelectStation, onClose }: D
       </div>
       <div className="departures-search">
         <input
-          list="depStations" placeholder="Bahnhof / Betriebsstelle suchen …" autoComplete="off"
+          type="search"
+          list="depStations"
+          placeholder="Bahnhof / Betriebsstelle suchen …"
+          autoComplete="off"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="search"
           value={query}
           onChange={(e) => handleQuery(e.target.value)}
         />

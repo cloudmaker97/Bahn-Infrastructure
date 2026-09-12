@@ -29,6 +29,9 @@ export interface InteractiveHit {
 
 /** Click hit radius in pixels (thin lines / small, moving points). */
 const CLICK_RADIUS_PX = 6;
+/** Left padding matching the docked side panel so flyTo/fitBounds center in the visible map. */
+const DESKTOP_LEFT_PADDING_PX = 332;
+const NARROW_MQ = '(max-width: 767px)';
 
 export class MapController {
   readonly map: maplibregl.Map;
@@ -39,6 +42,7 @@ export class MapController {
   private styleLoadCbs: Array<() => void> = [];
   private interactive = new Map<string, InteractiveSpec>();
   private hovered = new Set<string>();
+  private lastLeftPadding = -1;
   private popup: maplibregl.Popup | null = null;
   private basemapId: BasemapId;
 
@@ -49,8 +53,15 @@ export class MapController {
       style: styleUrl(initialBasemap),
       center: [10.4, 51.2],
       zoom: 5,
-      attributionControl: { compact: false, customAttribution: DATA_ATTRIBUTION },
+      attributionControl: { customAttribution: DATA_ATTRIBUTION },
     });
+
+    this.map.addControl(
+      new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }),
+      'bottom-left',
+    );
+    this.syncLayout();
+    this.map.on('resize', () => this.syncLayout());
 
     // style.load fires for the initial style and after every setStyle – overlays
     // re-attach there. `load` only fires once and is too late for style swaps.
@@ -152,7 +163,8 @@ export class MapController {
   /** Opens a popup (closes a possibly open one first). */
   openPopup(lngLat: LngLatLike, content: string | HTMLElement, maxWidthPx = 380): void {
     this.popup?.remove();
-    const popup = new maplibregl.Popup({ maxWidth: `${maxWidthPx}px` }).setLngLat(lngLat);
+    const width = Math.min(maxWidthPx, Math.max(220, window.innerWidth - 24));
+    const popup = new maplibregl.Popup({ maxWidth: `${width}px` }).setLngLat(lngLat);
     if (typeof content === 'string') popup.setHTML(content);
     else popup.setDOMContent(content);
     popup.addTo(this.map);
@@ -182,6 +194,14 @@ export class MapController {
     this.popup?.remove();
     this.popup = null;
     this.map.remove();
+  }
+
+  /** Desktop: keep geographic center in the map strip beside the docked panel. */
+  private syncLayout(): void {
+    const left = window.matchMedia(NARROW_MQ).matches ? 0 : DESKTOP_LEFT_PADDING_PX;
+    if (left === this.lastLeftPadding) return;
+    this.lastLeftPadding = left;
+    this.map.setPadding({ top: 0, right: 0, bottom: 0, left });
   }
 
   private handleStyleLoad(): void {

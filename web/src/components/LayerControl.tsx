@@ -30,13 +30,29 @@ interface LayerControlProps {
   onToggle: (key: string, on: boolean) => void;
   basemap: BasemapId;
   onBasemapChange: (id: BasemapId) => void;
+  /** Mobile drawer: open class, dialog semantics, and close control. */
+  open?: boolean;
+  onClose?: () => void;
+  narrow?: boolean;
 }
 
-export default function LayerControl({ items, onToggle, basemap, onBasemapChange }: LayerControlProps) {
+export default function LayerControl({
+  items, onToggle, basemap, onBasemapChange, open = false, onClose, narrow = false,
+}: LayerControlProps) {
   return (
-    <div className="layerctl">
+    <aside
+      id="layer-panel"
+      className={open ? 'layerctl is-open' : 'layerctl'}
+      role={narrow ? 'dialog' : 'complementary'}
+      aria-modal={narrow && open ? true : undefined}
+      aria-label="Kartenebenen"
+      inert={narrow && !open ? true : undefined}
+    >
       <div className="layerctl-head">
-        <span className="layerctl-kicker">Karte</span>
+        <div className="layerctl-head-row">
+          <span className="layerctl-kicker">Karte</span>
+          <button type="button" className="drawer-close" aria-label="Ebenen schließen" onClick={onClose}>✕</button>
+        </div>
         <SegmentedControl
           ariaLabel="Kartenstil"
           value={basemap}
@@ -61,6 +77,6 @@ export default function LayerControl({ items, onToggle, basemap, onBasemapChange
           </label>
         );
       })}
-    </div>
+    </aside>
   );
 }
