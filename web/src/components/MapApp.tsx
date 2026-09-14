@@ -2,7 +2,8 @@
 
 // Map application: connects the imperative map world (useMapLayers) with the
 // React UI state (color mode, visibilities, status lines, counters) and lays
-// out the panel, layer control, and version badge. All visible text is German.
+// out the panel, layer control, version badge, and mobile chrome (drawers).
+// All visible text is German.
 import { useEffect, useState } from 'react';
 import type { DeparturesStation, RouteResult } from '@/lib/types';
 import { persistBasemap, readStoredBasemap, type BasemapId } from '@/map/basemap';
@@ -16,6 +17,7 @@ import RoutingForm from './RoutingForm';
 import SearchForm from './SearchForm';
 import SidePanel, { type RailNetworkStatus } from './SidePanel';
 import { useMapLayers } from './use-map-layers';
+import { useNarrowViewport } from './use-narrow-viewport';
 import VersionBadge from './VersionBadge';
 
 export default function MapApp() {
@@ -36,9 +38,12 @@ export default function MapApp() {
   });
   const [overlayOn, setOverlayOn] = useState<Partial<Record<OverlayKey, boolean>>>({});
   // Departures panel: closed by default; opens via the operating-point popup
-  // button or the collapsed "Abfahrten" toggle at the bottom right.
+  // button or the collapsed "Abfahrten" toggle.
   const [departuresOpen, setDeparturesOpen] = useState(false);
   const [departuresStation, setDeparturesStation] = useState<DeparturesStation | null>(null);
+  const [sideOpen, setSideOpen] = useState(false);
+  const [layersOpen, setLayersOpen] = useState(false);
+  const narrow = useNarrowViewport();
 
   const [railNetworkStatus, setRailNetworkStatus] = useState<RailNetworkStatus>({ text: 'Lade Daten …', frac: null });
   const [networkStatusText, setNetworkStatusText] = useState('');
@@ -55,6 +60,8 @@ export default function MapApp() {
     onShowDepartures: (station) => {
       setDeparturesStation(station);
       setDeparturesOpen(true);
+      setSideOpen(false);
+      setLayersOpen(false);
     },
   }, basemap);
 
@@ -135,9 +142,69 @@ export default function MapApp() {
 
   const handleToggle = (key: string, on: boolean): void => toggles[key]?.(on);
 
+  const closeDrawers = (): void => {
+    setSideOpen(false);
+    setLayersOpen(false);
+  };
+
+  const openSide = (): void => {
+    setSideOpen(true);
+    setLayersOpen(false);
+    setDeparturesOpen(false);
+  };
+
+  const openLayers = (): void => {
+    setLayersOpen(true);
+    setSideOpen(false);
+    setDeparturesOpen(false);
+  };
+
+  const openDepartures = (): void => {
+    setDeparturesOpen(true);
+    if (narrow) closeDrawers();
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return;
+      closeDrawers();
+      setDeparturesOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const overlayOpen = narrow && (sideOpen || layersOpen || departuresOpen);
+
   return (
     <>
       <div id="map" ref={layers.mapDiv} />
+      <button
+        type="button"
+        className="chrome-btn chrome-btn-menu"
+        aria-controls="side-panel"
+        aria-expanded={sideOpen}
+        aria-label="Menü öffnen"
+        onClick={openSide}
+      >
+        Menü
+      </button>
+      <button
+        type="button"
+        className="chrome-btn chrome-btn-layers"
+        aria-controls="layer-panel"
+        aria-expanded={layersOpen}
+        aria-label="Ebenen öffnen"
+        onClick={openLayers}
+      >
+        Ebenen
+      </button>
+      {overlayOpen ? (
+        <div
+          className="drawer-backdrop"
+          onClick={() => { closeDrawers(); setDeparturesOpen(false); }}
+        />
+      ) : null}
       <SidePanel
         colorMode={colorMode}
         onColorModeChange={setColorMode}
@@ -152,12 +219,18 @@ export default function MapApp() {
           />
         )}
         noticesSlot={<AggregateNotices items={networkStatusData?.aggregateNotices ?? []} />}
+        open={sideOpen}
+        onClose={closeDrawers}
+        narrow={narrow}
       />
       <LayerControl
         items={layerItems}
         onToggle={handleToggle}
         basemap={basemap}
         onBasemapChange={setBasemap}
+        open={layersOpen}
+        onClose={closeDrawers}
+        narrow={narrow}
       />
       {departuresOpen ? (
         <DeparturesPanel
@@ -166,7 +239,7 @@ export default function MapApp() {
           onClose={() => setDeparturesOpen(false)}
         />
       ) : (
-        <button type="button" className="departures-toggle" onClick={() => setDeparturesOpen(true)}>
+        <button type="button" className="departures-toggle" onClick={openDepartures}>
           Abfahrten
         </button>
       )}

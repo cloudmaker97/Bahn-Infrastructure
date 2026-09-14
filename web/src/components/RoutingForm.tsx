@@ -81,12 +81,16 @@ export default function RoutingForm({ onRoute, onClear }: RoutingFormProps) {
     <div className="routing">
       <label htmlFor="rFrom">Routenfindung (RL100)</label>
       <input
-        id="rFrom" list="rlList" placeholder="Start – z. B. AH (Hamburg Hbf)" autoComplete="off"
+        id="rFrom" list="rlList" placeholder="Start – z. B. AH (Hamburg Hbf)"
+        autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false}
+        enterKeyHint="next"
         value={from}
         onChange={(e) => { setFrom(e.target.value); autocomplete(e.target.value); }}
       />
       <input
-        id="rTo" list="rlList" placeholder="Ziel – z. B. MH (München Hbf)" autoComplete="off"
+        id="rTo" list="rlList" placeholder="Ziel – z. B. MH (München Hbf)"
+        autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false}
+        enterKeyHint="go"
         style={{ marginTop: 6 }}
         value={to}
         onChange={(e) => { setTo(e.target.value); autocomplete(e.target.value); }}

@@ -29,6 +29,9 @@ export interface InteractiveHit {
 
 /** Click hit radius in pixels (thin lines / small, moving points). */
 const CLICK_RADIUS_PX = 6;
+/** Left padding matching the docked side panel so flyTo/fitBounds center in the visible map. */
+const DESKTOP_LEFT_PADDING_PX = 332;
+const NARROW_MQ = '(max-width: 767px), (max-width: 960px) and (max-height: 500px)';
 
 export class MapController {
   readonly map: maplibregl.Map;
@@ -39,6 +42,7 @@ export class MapController {
   private styleLoadCbs: Array<() => void> = [];
   private interactive = new Map<string, InteractiveSpec>();
   private hovered = new Set<string>();
+  private lastLeftPadding = -1;
   private popup: maplibregl.Popup | null = null;
   private basemapId: BasemapId;
 
@@ -49,15 +53,18 @@ export class MapController {
       style: styleUrl(initialBasemap),
       center: [10.4, 51.2],
       zoom: 5,
-      attributionControl: { compact: false, customAttribution: DATA_ATTRIBUTION },
+      attributionControl: { compact: true, customAttribution: DATA_ATTRIBUTION },
     });
+
+    this.map.addControl(
+      new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }),
+      'bottom-left',
+    );
 
     // style.load fires for the initial style and after every setStyle – overlays
     // re-attach there. `load` only fires once and is too late for style swaps.
     this.map.on('style.load', () => this.handleStyleLoad());
-
-    // One global click handler for all interactive layers: the topmost feature
-    // wins (queryRenderedFeatures returns in render order, top first).
+    this.map.on('resize', () => this.syncLayout());
     this.map.on('click', (e: MapMouseEvent) => this.handleClick(e));
   }
 
@@ -104,7 +111,10 @@ export class MapController {
 
   /** Creates a GeoJSON source or updates its data (idempotent). */
   addOrSetGeoJson(id: string, data: GeoJSON.GeoJSON): void {
-    if (!this.ready || !this.map.isStyleLoaded()) return;
+    // Gate on `ready` (style.load), not isStyleLoaded(): the latter stays false
+    // until every basemap tile/glyph/sprite is in, so overlays would be skipped
+    // if the ISR GeoJSON arrived first.
+    if (!this.ready) return;
     const source = this.map.getSource(id) as GeoJSONSource | undefined;
     if (source) source.setData(data);
     else this.map.addSource(id, { type: 'geojson', data });
@@ -112,7 +122,7 @@ export class MapController {
 
   /** Adds a layer only when it does not exist yet. */
   addLayerOnce(layerSpec: LayerSpecification, before?: string): void {
-    if (!this.ready || !this.map.isStyleLoaded()) return;
+    if (!this.ready) return;
     if (this.map.getLayer(layerSpec.id)) return;
     // Use `before` only when the target layer exists (robust against load order).
     this.map.addLayer(layerSpec, before && this.map.getLayer(before) ? before : undefined);
@@ -152,7 +162,8 @@ export class MapController {
   /** Opens a popup (closes a possibly open one first). */
   openPopup(lngLat: LngLatLike, content: string | HTMLElement, maxWidthPx = 380): void {
     this.popup?.remove();
-    const popup = new maplibregl.Popup({ maxWidth: `${maxWidthPx}px` }).setLngLat(lngLat);
+    const width = Math.min(maxWidthPx, Math.max(220, window.innerWidth - 24));
+    const popup = new maplibregl.Popup({ maxWidth: `${width}px` }).setLngLat(lngLat);
     if (typeof content === 'string') popup.setHTML(content);
     else popup.setDOMContent(content);
     popup.addTo(this.map);
@@ -184,8 +195,30 @@ export class MapController {
     this.map.remove();
   }
 
+  /** Desktop: keep geographic center in the map strip beside the docked panel. */
+  private syncLayout(): void {
+    if (!this.ready) return;
+    const canvas = this.map.getCanvas();
+    const width = canvas?.clientWidth ?? 0;
+    const left = window.matchMedia(NARROW_MQ).matches ? 0 : DESKTOP_LEFT_PADDING_PX;
+    if (left > 0 && width > 0 && left >= width) return;
+    if (left !== this.lastLeftPadding) {
+      this.lastLeftPadding = left;
+      this.map.setPadding({ top: 0, right: 0, bottom: 0, left });
+    }
+    this.collapseCompactAttrib();
+  }
+
+  /** On phones keep the attribution as the compact "i" so it does not collide with Abfahrten. */
+  private collapseCompactAttrib(): void {
+    if (!window.matchMedia(NARROW_MQ).matches) return;
+    const el = this.map.getContainer().querySelector('.maplibregl-ctrl-attrib');
+    if (el instanceof HTMLDetailsElement) el.open = false;
+  }
+
   private handleStyleLoad(): void {
     this.ready = true;
+    this.syncLayout();
     const queued = this.readyCbs;
     this.readyCbs = [];
     for (const cb of queued) cb();

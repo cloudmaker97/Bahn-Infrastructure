@@ -74,7 +74,6 @@ export function useMapLayers(
       (station) => cbs.current.onShowDepartures(station),
     );
     const routeLayer = new RouteLayer(controller);
-    const nearby = new NearbyPicker(controller);
     railNetwork.current = rail;
     trains.current = trainsLayer;
     networkStatus.current = status;
@@ -86,6 +85,12 @@ export function useMapLayers(
     void rail.load().then(() => status.rebuildClosures());
     status.start();
     isrOverlays.loadAll();
+    let nearby: NearbyPicker | null = null;
+    try {
+      nearby = new NearbyPicker(controller);
+    } catch {
+      /* map still works without the nearby-picker */
+    }
 
     controller.onReady(() => {
       // E2E hooks: expose map, controller, and layer modules globally.
@@ -95,7 +100,7 @@ export function useMapLayers(
     });
 
     return () => {
-      nearby.dispose();
+      nearby?.dispose();
       status.dispose();
       trainsLayer.dispose();
       controller.dispose();

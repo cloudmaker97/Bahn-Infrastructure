@@ -22,7 +22,12 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
       <div className="row">
         <input
           id="search"
-          type="text"
+          type="search"
+          enterKeyHint="search"
+          autoCapitalize="off"
+          autoCorrect="off"
+          autoComplete="off"
+          spellCheck={false}
           placeholder="z. B. 1011, FF, ICE 577"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
