@@ -60,16 +60,11 @@ export class MapController {
       new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }),
       'bottom-left',
     );
-    this.syncLayout();
-    this.map.on('resize', () => this.syncLayout());
-    this.map.once('load', () => this.collapseCompactAttrib());
 
     // style.load fires for the initial style and after every setStyle – overlays
     // re-attach there. `load` only fires once and is too late for style swaps.
     this.map.on('style.load', () => this.handleStyleLoad());
-
-    // One global click handler for all interactive layers: the topmost feature
-    // wins (queryRenderedFeatures returns in render order, top first).
+    this.map.on('resize', () => this.syncLayout());
     this.map.on('click', (e: MapMouseEvent) => this.handleClick(e));
   }
 
@@ -116,7 +111,10 @@ export class MapController {
 
   /** Creates a GeoJSON source or updates its data (idempotent). */
   addOrSetGeoJson(id: string, data: GeoJSON.GeoJSON): void {
-    if (!this.ready || !this.map.isStyleLoaded()) return;
+    // Gate on `ready` (style.load), not isStyleLoaded(): the latter stays false
+    // until every basemap tile/glyph/sprite is in, so overlays would be skipped
+    // if the ISR GeoJSON arrived first.
+    if (!this.ready) return;
     const source = this.map.getSource(id) as GeoJSONSource | undefined;
     if (source) source.setData(data);
     else this.map.addSource(id, { type: 'geojson', data });
@@ -124,7 +122,7 @@ export class MapController {
 
   /** Adds a layer only when it does not exist yet. */
   addLayerOnce(layerSpec: LayerSpecification, before?: string): void {
-    if (!this.ready || !this.map.isStyleLoaded()) return;
+    if (!this.ready) return;
     if (this.map.getLayer(layerSpec.id)) return;
     // Use `before` only when the target layer exists (robust against load order).
     this.map.addLayer(layerSpec, before && this.map.getLayer(before) ? before : undefined);
@@ -199,7 +197,11 @@ export class MapController {
 
   /** Desktop: keep geographic center in the map strip beside the docked panel. */
   private syncLayout(): void {
+    if (!this.ready) return;
+    const canvas = this.map.getCanvas();
+    const width = canvas?.clientWidth ?? 0;
     const left = window.matchMedia(NARROW_MQ).matches ? 0 : DESKTOP_LEFT_PADDING_PX;
+    if (left > 0 && width > 0 && left >= width) return;
     if (left !== this.lastLeftPadding) {
       this.lastLeftPadding = left;
       this.map.setPadding({ top: 0, right: 0, bottom: 0, left });
@@ -216,6 +218,7 @@ export class MapController {
 
   private handleStyleLoad(): void {
     this.ready = true;
+    this.syncLayout();
     const queued = this.readyCbs;
     this.readyCbs = [];
     for (const cb of queued) cb();

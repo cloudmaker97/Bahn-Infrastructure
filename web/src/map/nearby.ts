@@ -56,7 +56,7 @@ export class NearbyPicker {
     controller.map.on('touchmove', this.onTouchMove);
     controller.map.on('touchend', this.onTouchEnd);
     controller.map.on('touchcancel', this.onTouchEnd);
-    controller.map.getCanvas().addEventListener('click', this.onDomClickCapture, true);
+    this.canvas()?.addEventListener('click', this.onDomClickCapture, true);
   }
 
   dispose(): void {
@@ -66,7 +66,12 @@ export class NearbyPicker {
     this.controller.map.off('touchmove', this.onTouchMove);
     this.controller.map.off('touchend', this.onTouchEnd);
     this.controller.map.off('touchcancel', this.onTouchEnd);
-    this.controller.map.getCanvas().removeEventListener('click', this.onDomClickCapture, true);
+    this.canvas()?.removeEventListener('click', this.onDomClickCapture, true);
+  }
+
+  private canvas(): HTMLCanvasElement | null {
+    try { return this.controller.map.getCanvas(); }
+    catch { return null; }
   }
 
   private beginPress(e: MapTouchEvent): void {
