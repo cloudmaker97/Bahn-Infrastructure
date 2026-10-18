@@ -12,6 +12,9 @@ services:
       - SERVICE_FQDN_ISR_8000
       - PORT=8000
       - HEADLESS=1
+      # Self-hosted Transitous (MOTIS, Germany) on the map server; remove to fall back
+      # to the public api.transitous.org.
+      - TRANSITOUS_BASE_URL=https://transit.map.apps.dennis-heinri.ch
     expose:
       - "8000"
     volumes:

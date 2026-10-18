@@ -50,18 +50,24 @@ export const TRANSITOUS_HEADERS: Record<string, string> = {
   Accept: 'application/json',
 };
 
+/**
+ * Base URL of the Transitous (MOTIS) API. Defaults to the public instance;
+ * TRANSITOUS_BASE_URL points the app at a self-hosted one.
+ */
+export const TRANSITOUS_BASE_URL = (process.env.TRANSITOUS_BASE_URL || 'https://api.transitous.org').replace(/\/+$/, '');
+
 /** Transitous map/trips – source of the live train positions (server is authoritative). */
-export const LIVETRIPS_API = 'https://api.transitous.org/api/v6/map/trips';
+export const LIVETRIPS_API = `${TRANSITOUS_BASE_URL}/api/v6/map/trips`;
 /** Burst cache per zoom bucket (rate-limit protection towards Transitous). */
 export const LIVETRIPS_TTL_MS = 10_000;
 
 /** Transitous trip – source of the per-trip schedule (all stops with times). */
-export const TRIP_API = 'https://api.transitous.org/api/v6/trip';
+export const TRIP_API = `${TRANSITOUS_BASE_URL}/api/v6/trip`;
 /** Cache duration of trip details per tripId (delays change, lines rarely). */
 export const TRIP_TTL_MS = 30_000;
 
 /** Transitous stoptimes – source of the next departures at a station. */
-export const DEPARTURES_API = 'https://api.transitous.org/api/v6/stoptimes';
+export const DEPARTURES_API = `${TRANSITOUS_BASE_URL}/api/v6/stoptimes`;
 /** Cache duration of departures per station coordinate (delays change often). */
 export const DEPARTURES_TTL_MS = 30_000;
 

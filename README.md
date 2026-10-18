@@ -26,6 +26,7 @@ Alle Transitous-Abfragen (Live-Züge, Fahrtverlauf, Abfahrten) senden einen
 identifizierenden User-Agent – ohne den antwortet `api.transitous.org` mit
 HTTP 403 (Node schickt per Default nur `node`). `TRANSITOUS_USER_AGENT`
 übersteuert ihn, z. B. um bei einem öffentlichen Deployment eine
-Kontaktadresse zu hinterlegen.
+Kontaktadresse zu hinterlegen. `TRANSITOUS_BASE_URL` wählt die Transitous-/MOTIS-Instanz
+(Standard `https://api.transitous.org`; `docker-compose.yml` setzt die eigene Instanz).
 Die Kartensuche findet Streckennummern, RL100-Betriebsstellen und Live-Züge
 (vollständiger Name wie „ICE 577" oder reine Zugnummer).
