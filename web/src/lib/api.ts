@@ -6,9 +6,36 @@ import type {
   StationSuggestion, TripDetailsResult, VersionInfo,
 } from './types';
 
+const SESSION_RELOAD_KEY = 'isr.sessionReloadAt';
+const SESSION_RELOAD_MIN_GAP_MS = 60_000;
+
+/**
+ * fetch() for our own APIs. Behind a forward-auth proxy (e.g. authentik) an expired
+ * session turns every API call into a cross-origin redirect to the login page, which
+ * the browser surfaces only as an opaque "Failed to fetch". `redirect: 'manual'` makes
+ * that case detectable: we reload the page once (guarded against loops) so the proxy
+ * can re-authenticate, and throw a readable error meanwhile.
+ */
+async function apiFetch(url: string): Promise<Response> {
+  const resp = await fetch(url, { redirect: 'manual' });
+  if (resp.type === 'opaqueredirect') {
+    try {
+      const last = Number(sessionStorage.getItem(SESSION_RELOAD_KEY)) || 0;
+      if (Date.now() - last > SESSION_RELOAD_MIN_GAP_MS) {
+        sessionStorage.setItem(SESSION_RELOAD_KEY, String(Date.now()));
+        location.reload();
+      }
+    } catch {
+      /* storage blocked: no automatic reload, the error below still explains it */
+    }
+    throw new Error('Sitzung abgelaufen – bitte Seite neu laden');
+  }
+  return resp;
+}
+
 /** GET + JSON with error check (HTTP status ≠ 2xx throws). */
 async function getJson<T>(url: string): Promise<T> {
-  const resp = await fetch(url);
+  const resp = await apiFetch(url);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json() as Promise<T>;
 }
@@ -49,7 +76,7 @@ export function getStations(q: string): Promise<StationSuggestion[]> {
 /** Computes a route; the server responds with JSON even on errors (HTTP 400). */
 export async function getRoute(from: string, to: string, mode: RouteMode): Promise<RouteResponse> {
   const url = `/api/route?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&mode=${mode}`;
-  const resp = await fetch(url);
+  const resp = await apiFetch(url);
   return resp.json() as Promise<RouteResponse>;
 }
 
@@ -61,7 +88,7 @@ export async function fetchJsonWithProgress<T>(
   url: string,
   onProgress: (frac: number | null) => void,
 ): Promise<T> {
-  const resp = await fetch(url);
+  const resp = await apiFetch(url);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const total = Number(resp.headers.get('Content-Length')) || 0;
   if (!resp.body || !total) {
