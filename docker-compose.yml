@@ -12,9 +12,10 @@ services:
       - SERVICE_FQDN_ISR_8000
       - PORT=8000
       - HEADLESS=1
-      # Self-hosted Transitous (MOTIS, Germany) on the map server; remove to fall back
-      # to the public api.transitous.org.
-      - TRANSITOUS_BASE_URL=https://transit.map.apps.dennis-heinri.ch
+      # Live data come from the public api.transitous.org (default). The self-hosted
+      # MOTIS instance (transit.map.apps.dennis-heinri.ch) is NOT used: its GTFS zips
+      # are static, so trip ids drift from the GTFS-RT feeds and ICE/IC never get
+      # realtime. Set TRANSITOUS_BASE_URL only once that instance refreshes its feeds.
     expose:
       - "8000"
     volumes:
